@@ -1,0 +1,10 @@
+
+
+call, file = $LCLS_LATTICE/bmad/models/cu_hxr/cu_hxr.lat.bmad
+
+
+O_BC2[angle_deg] = -1.9897365E+00
+
+BEG_BX24: marker, superimpose, ref=BX24, ref_origin=beginning
+
+

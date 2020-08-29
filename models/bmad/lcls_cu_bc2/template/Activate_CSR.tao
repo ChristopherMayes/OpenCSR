@@ -1,0 +1,34 @@
+!---Turns on some typical CSR parameters
+
+!set global track_type = single
+
+set global plot_on = false
+set global lattice_calc_on=false
+
+!---Turn on ISR fluctuations
+set bmad_com radiation_fluctuations_on = T
+
+!---CSR---
+set csr_param beam_chamber_height = 0.024  ! 24 mm full height
+set csr_param n_shield_images = 0
+set csr_param ds_track_step = 0.01
+set csr_param n_bin = 40
+set csr_param particle_bin_span = 2
+set csr_param sigma_cutoff = 0.1 ! Cutoff for the lsc calc. If a bin sigma is < cutoff * sigma_ave then ignore.
+
+!---------------------------------------------
+set global lattice_calc_on=true
+
+
+set bmad_com csr_and_space_charge_on = T
+
+set ele * space_charge_method = off
+
+!set ele BX23:ENDBC2 CSR_METHOD  = 1_dim
+set ele BX24 CSR_METHOD  = 1_dim
+
+!set csr_param write_csr_wake = True
+
+set csr_param ds_track_step = 0.001
+set csr_param n_bin = 200
+

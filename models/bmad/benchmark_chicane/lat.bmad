@@ -1,0 +1,40 @@
+parameter[lattice] = "CSR benchmark chicane"
+
+beginning[beta_a] = 100
+beginning[beta_b] = 100
+
+beginning[p0c] = 5000e6
+
+parameter[geometry] = open
+
+
+
+
+Mar.BEG: marker
+Mar.END: marker
+
+angle = -2.77 * pi/180
+Lbendproj = 0.5 
+Lpipeproj = 5.0
+Lpipe_center = 1.0
+
+B1: sbend, L =Lbendproj * angle/sin(angle), angle = angle, e2 = angle
+B2: B1, angle = -angle, e1=-angle, e2 = 0
+B3: B1, angle = -angle, e1=0, e2 = -angle
+B4: B1, angle = angle, e1=angle, e2 = 0
+
+
+D0: Pipe, L = 1
+D1: drift, L = Lpipeproj/cos(angle)
+D2: drift, L = Lpipe_center
+D3: D1
+D4: drift, L = 2
+
+
+
+
+lat: line = (Mar.BEG, D0, B1, D1, B2, 
+D2, ! center
+B3, D3, B4, D4, Mar.END)
+
+use, lat
