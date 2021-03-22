@@ -1,6 +1,19 @@
-SUBROUTINE CALC(A,B,C, SUM,SUMSQ)
-   	REAL A,B,C,SUM,SUMSQ
-   	SUM = A + B + C
-   	SUMSQ = SUM **2
-   	RETURN
-END
+
+module csr3d_mod
+
+use, intrinsic :: iso_fortran_env
+use external_stuff_mod ! For FFTW, GSL special functions
+
+implicit none
+
+integer, parameter, private :: dp = REAL64
+
+contains
+
+subroutine csr3d_calc()
+print *, 'Done!'
+end subroutine
+
+end module
+
+
