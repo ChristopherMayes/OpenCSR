@@ -50,7 +50,7 @@ contains
 ! https://github.com/scipy/scipy/blob/3f017716532001349ccddb05498408d711bacdde/scipy/special/cephes/ellik.c#L160
 !
 !----------------------------------------------------------------------
-subroutine ellipinc(phi, m, ellipkinc, ellipeinc)
+elemental subroutine ellipinc(phi, m, ellipkinc, ellipeinc)
 
 real(dp), intent(in)  :: phi, m
 real(dp), intent(out) :: ellipkinc, ellipeinc
@@ -139,7 +139,7 @@ end subroutine test_xgelbd
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine gelbd(phi,mc,elb,eld)
+elemental subroutine gelbd(phi,mc,elb,eld)
 !
 ! Double precision associate incomplete elliptic integrals of the second kind
 !
@@ -157,7 +157,8 @@ subroutine gelbd(phi,mc,elb,eld)
 !
 !     Outputs: elb = B(phi|m), eld = D(phi|m)
 !
-real(dp) ::  phi,mc,elb,eld
+real(dp), intent(in) ::  phi,mc
+real(dp), intent(out) ::  elb,eld
 real(dp) ::  m,phix,celb,celd,phic
 real(dp) ::  PIHALF,PI,TWOPI,PIH3
 integer n
@@ -165,7 +166,7 @@ parameter (PI=3.141592653589793238462d0)
 parameter (PIHALF=PI*0.5d0,TWOPI=PI*2.d0,PIH3=PI*1.5d0)
 !
 if(mc.le.0.d0) then
-  write(*,*) "(gelbd) too small parameter: mc=",mc
+!  write(*,*) "(gelbd) too small parameter: mc=",mc
     return
 endif
 m=1.d0-mc
@@ -269,7 +270,7 @@ end subroutine rgelbd
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine elbd(phi,phic,mc,b,d)
+elemental subroutine elbd(phi,phic,mc,b,d)
 !
 ! Double precision associate incomplete elliptic integrals of the second kind
 !
@@ -287,7 +288,8 @@ subroutine elbd(phi,phic,mc,b,d)
 !
 !     Outputs: elb = B(phi|m), eld = D(phi|m)
 !
-real(dp) ::  phi,phic,mc,b,d
+real(dp), intent(in) :: phi,phic,mc
+real(dp), intent(out) :: b,d
 real(dp) ::  m,c,x,d2,z,k,bc,ec,dc,sz,v,t2
 
 if(phi.lt.1.25d0) then
@@ -322,9 +324,10 @@ return
 end subroutine elbd
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine elsbd(s0,mc,b,d)
+elemental subroutine elsbd(s0,mc,b,d)
 
-real(dp) ::  s0,mc,b,d
+real(dp), intent(in) ::  s0,mc
+real(dp), intent(out) ::  b,d
 real(dp) ::  m,del,s,y,sy
 real(dp) ::  yy(11),ss(11)
 integer i, j
@@ -350,7 +353,7 @@ do j=1,10
     goto 1
   endif
 enddo
-write(*,*) "(elsbd) too many iterations: s0,m=",s0,m
+!write(*,*) "(elsbd) too many iterations: s0,m=",s0,m
 1 continue
 ! write(*,*) 'j=',j
 call serbd(y,m,b,d)
@@ -367,9 +370,10 @@ end subroutine elsbd
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine elcbd(c0,mc,b,dx)
+elemental subroutine elcbd(c0,mc,b,dx)
 
-real(dp) ::  c0,mc,b,dx
+real(dp), intent(in)  ::  c0,mc
+real(dp), intent(out) ::  b,dx
 real(dp) ::  c,x,y,s,m,d,sy
 real(dp) ::  yy(11),ss(11)
 integer j,i
@@ -400,7 +404,7 @@ do j=1,10
   endif
   c=sqrt(x)
 enddo
-write(*,*) "(elcbd) too many iterations: c0,mc=",c0,mc
+!write(*,*) "(elcbd) too many iterations: c0,mc=",c0,mc
 1 continue
 s=ss(j+1)
 call elsbd(s,mc,b,dx)
@@ -415,7 +419,7 @@ end subroutine elcbd
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine celbd(mc,elb,eld)
+elemental subroutine celbd(mc,elb,eld)
 !
 ! Double precision associate complete elliptic integral of the second kind
 !
@@ -429,7 +433,8 @@ subroutine celbd(mc,elb,eld)
 !
 !     Outputs: elb = B(m), eld = D(m)
 !
-real(dp) ::  mc,elb,eld
+real(dp), intent(in)  ::  mc
+real(dp), intent(out) ::  elb,eld
 real(dp) ::  m,nome,dkkc,dddc,mx,kkc,logq2,elk,dele,elk1,delb
 
 real(dp) ::  PIQ,PIHALF,PI,PIINV
@@ -919,9 +924,10 @@ end subroutine celbd
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine serbd(y,m,b,d)
+elemental subroutine serbd(y,m,b,d)
 
-real(dp) ::  y,m,b,d
+real(dp), intent(in)  :: y,m
+real(dp), intent(out) :: b,d
 real(dp) ::  F1,F2,F3,F4,F10,F20,F21,F30,F31,F40,F41,F42
 real(dp) ::  F5,F50,F51,F52,F6,F60,F61,F62,F63
 real(dp) ::  F7,F70,F71,F72,F73,F8,F80,F81,F82,F83,F84
