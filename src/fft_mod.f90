@@ -1,6 +1,10 @@
-module external_stuff_mod
+module fft_mod
+
+use, intrinsic :: iso_fortran_env
 
 implicit none
+
+integer, parameter, private :: dp = REAL64
 
 contains
 
@@ -38,4 +42,5 @@ print *, '...done'
 
 end subroutine
 
-end module
+
+end module fft_mod

@@ -38,15 +38,17 @@ install(DIRECTORY ${CMAKE_Fortran_MODULE_DIRECTORY}/ DESTINATION include)
 # Source files for OpenCSR
 list(APPEND _sources
     src/csr3d_mod.f90
-    src/external_stuff_mod.f90
+    src/elliptic_integral_mod.f90    
+    src/fft_mod.f90
 )
 
 # opencsr library
 add_library(opencsr ${_sources})
 
+# Not needed, will use internal .f90 for elliptic integrals
 # Link to GSL
-find_package(GSL REQUIRED)
-target_link_libraries(opencsr PUBLIC GSL::gsl GSL::gslcblas)
+#find_package(GSL REQUIRED)
+#target_link_libraries(opencsr PUBLIC GSL::gsl GSL::gslcblas)
 
 # Link to FFTW
 find_package(FFTW REQUIRED)
