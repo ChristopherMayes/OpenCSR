@@ -484,10 +484,10 @@ parameter (D6=14553.d0/262144.d0)
 parameter (D7=99099.d0/2097152.d0)
 parameter (D8=2760615.d0/67108864.d0)
 
-logical first/.TRUE./
+! logical first/.TRUE./
 
 !if(first) then
-    first=.FALSE.
+!    first=.FALSE.
 	mcold=1.d0
 	elbold=PIQ
 	eldold=PIQ
@@ -1232,10 +1232,10 @@ parameter (D3=15.0/128.0)
 parameter (D4=175.0/2048.0)
 parameter (D5=2205.0/32768.0)
 
-logical first/.TRUE./
+!logical first/.TRUE./
 
 !if(first) then
-    first=.FALSE.
+!    first=.FALSE.
 	mcold=1.0
 	elbold=PIQ
 	eldold=PIQ
