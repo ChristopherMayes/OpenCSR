@@ -30,6 +30,26 @@ set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/mod)
 # this is where they will be installed
 install(DIRECTORY ${CMAKE_Fortran_MODULE_DIRECTORY}/ DESTINATION include)
 
+#############################
+# Fortran Flags
+#############################
+# More info on dialect flags here: https://gcc.gnu.org/onlinedocs/gfortran/Fortran-Dialect-Options.html#Fortran-Dialect-Options
+# More info on code generation flags here: https://gcc.gnu.org/onlinedocs/gfortran/Code-Gen-Options.html#Code-Gen-Options
+if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+    set(dialect "-Wconversion -ffree-form -ffree-line-length-none -cpp -std=f2008 -fimplicit-none")
+    set(bounds "-fcheck=bounds")
+endif()
+if(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
+    set(dialect "-stand f08 -free -implicitnone")
+    set(bounds "-check bounds")
+endif()
+if(CMAKE_Fortran_COMPILER_ID MATCHES "PGI")
+    set(dialect "-Mfreeform -Mdclchk -Mstandard -Mallocatable=03")
+    set(bounds "-C")
+endif()
+
+set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} ${bounds}")
+set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${dialect}")
 
 #############################
 # OpenCSR Library
