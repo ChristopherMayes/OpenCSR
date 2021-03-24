@@ -4,6 +4,8 @@ use, intrinsic :: iso_fortran_env
 
 implicit none
 
+
+integer, parameter, private :: sp = REAL32
 integer, parameter, private :: dp = REAL64
 
 contains
@@ -59,6 +61,8 @@ real(dp) :: m1, phi1, d, b, mc, elb,eld
 ! 'classically called the imaginary modulus transformation' - Fukushima 2018
 ! Use his notation, except with original m = -m. 
 ! Note there is a typo in Eq. 8. All phi on the r.h.s should be phi1
+! 
+! Alternatively, Appendix B. from Fukushima could be used. 
 if (m<0) then
   m1 = m/(m-1) 
   d = sqrt(1-m) ! denominator in Eq. 7
@@ -100,11 +104,11 @@ subroutine test_xgelbd()
 ! test driver for gelbd
 !
 implicit none
-real*8 PI,PIHALF
+real(dp) ::  PI,PIHALF
 parameter (PI=3.1415926535897932384626433d0)
 parameter (PIHALF=PI*0.5d0)
-real*8 dmc,mc,m,dphi,phi,b,d
-real*4 rmc,rphi,rb,rd,rdb,rdd
+real(dp) ::  dmc,mc,m,dphi,phi,b,d
+real(sp) ::  rmc,rphi,rb,rd,rdb,rdd
 integer jend,iend,j,i
 !
 jend=10
@@ -153,9 +157,9 @@ subroutine gelbd(phi,mc,elb,eld)
 !
 !     Outputs: elb = B(phi|m), eld = D(phi|m)
 !
-real*8 phi,mc,elb,eld
-real*8 m,phix,celb,celd,phic
-real*8 PIHALF,PI,TWOPI,PIH3
+real(dp) ::  phi,mc,elb,eld
+real(dp) ::  m,phix,celb,celd,phic
+real(dp) ::  PIHALF,PI,TWOPI,PIH3
 integer n
 parameter (PI=3.141592653589793238462d0)
 parameter (PIHALF=PI*0.5d0,TWOPI=PI*2.d0,PIH3=PI*1.5d0)
@@ -218,9 +222,9 @@ subroutine rgelbd(phi,mc,elb,eld)
 !
 !     Outputs: elb = B(phi|m), eld = D(phi|m)
 !
-real*4 phi,mc,elb,eld
-real*4 m,phix,celb,celd,phic
-real*4 PIHALF,PI,TWOPI,PIH3
+real(sp) ::  phi,mc,elb,eld
+real(sp) ::  m,phix,celb,celd,phic
+real(sp) ::  PIHALF,PI,TWOPI,PIH3
 integer n
 parameter (PI=3.14159265)
 parameter (PIHALF=PI*0.5,TWOPI=PI*2.0,PIH3=PI*1.5)
@@ -283,8 +287,8 @@ subroutine elbd(phi,phic,mc,b,d)
 !
 !     Outputs: elb = B(phi|m), eld = D(phi|m)
 !
-real*8 phi,phic,mc,b,d
-real*8 m,c,x,d2,z,k,bc,ec,dc,sz,v,t2
+real(dp) ::  phi,phic,mc,b,d
+real(dp) ::  m,c,x,d2,z,k,bc,ec,dc,sz,v,t2
 
 if(phi.lt.1.25d0) then
     call elsbd(sin(phi),mc,b,d)
@@ -320,9 +324,9 @@ end subroutine elbd
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine elsbd(s0,mc,b,d)
 
-real*8 s0,mc,b,d
-real*8 m,del,s,y,sy
-real*8 yy(11),ss(11)
+real(dp) ::  s0,mc,b,d
+real(dp) ::  m,del,s,y,sy
+real(dp) ::  yy(11),ss(11)
 integer i, j
 
 ! write(*,*) "(elsbd) s0,m=",s0,m
@@ -365,9 +369,9 @@ end subroutine elsbd
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine elcbd(c0,mc,b,dx)
 
-real*8 c0,mc,b,dx
-real*8 c,x,y,s,m,d,sy
-real*8 yy(11),ss(11)
+real(dp) ::  c0,mc,b,dx
+real(dp) ::  c,x,y,s,m,d,sy
+real(dp) ::  yy(11),ss(11)
 integer j,i
 
 ! write(*,*) "(elcbd) c0,mc=",c0,mc
@@ -425,19 +429,19 @@ subroutine celbd(mc,elb,eld)
 !
 !     Outputs: elb = B(m), eld = D(m)
 !
-real*8 mc,elb,eld
-real*8 m,nome,dkkc,dddc,mx,kkc,logq2,elk,dele,elk1,delb
+real(dp) ::  mc,elb,eld
+real(dp) ::  m,nome,dkkc,dddc,mx,kkc,logq2,elk,dele,elk1,delb
 
-real*8 PIQ,PIHALF,PI,PIINV
+real(dp) ::  PIQ,PIHALF,PI,PIINV
 parameter (PIQ=0.78539816339744830961566084581988d0)
 parameter (PIHALF=1.5707963267948966192313216916398d0)
 parameter (PI=3.1415926535897932384626433832795d0)
 parameter (PIINV=0.31830988618379067153776752674503d0)
 
-real*8 mcold,elbold,eldold
-save mcold,elbold,eldold
+real(dp) ::  mcold,elbold,eldold
+! save mcold,elbold,eldold
 
-real*8 Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10,Q11,Q12,Q13,Q14,Q15,Q16
+real(dp) ::  Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10,Q11,Q12,Q13,Q14,Q15,Q16
 parameter (Q1=1.d0/16.d0,Q2=1.d0/32.d0,Q3=21.d0/1024.d0)
 parameter (Q4=31.d0/2048.d0,Q5=6257.d0/524288.d0)
 parameter (Q6=10293.d0/1048576.d0,Q7=279025.d0/33554432.d0)
@@ -451,7 +455,7 @@ parameter (Q14=17652604545791.d0/4503599627370496.d0)
 parameter (Q15=523910972020563.d0/144115188075855872.d0)
 parameter (Q16=976501268709949.d0/288230376151711744.d0)
 
-real*8 K1,K2,K3,K4,K5,K6,K7
+real(dp) ::  K1,K2,K3,K4,K5,K6,K7
 parameter (K1=1.d0/4.d0)
 parameter (K2=9.d0/64.d0)
 parameter (K3=25.d0/256.d0)
@@ -460,7 +464,7 @@ parameter (K5=3969.d0/65536.d0)
 parameter (K6=53361.d0/1048576.d0)
 parameter (K7=184041.d0/4194304.d0)
 
-real*8 B1,B2,B3,B4,B5,B6,B7,B8
+real(dp) ::  B1,B2,B3,B4,B5,B6,B7,B8
 parameter (B1=1.d0/2.d0)
 parameter (B2=1.d0/16.d0)
 parameter (B3=3.d0/128.d0)
@@ -470,7 +474,7 @@ parameter (B6=1323.d0/262144.d0)
 parameter (B7=7623.d0/2097152.d0)
 parameter (B8=184041.d0/67108864.d0)
 
-real*8 D1,D2,D3,D4,D5,D6,D7,D8
+real(dp) ::  D1,D2,D3,D4,D5,D6,D7,D8
 parameter (D1=1.d0/2.d0)
 parameter (D2=3.d0/16.d0)
 parameter (D3=15.d0/128.d0)
@@ -482,12 +486,12 @@ parameter (D8=2760615.d0/67108864.d0)
 
 logical first/.TRUE./
 
-if(first) then
+!if(first) then
     first=.FALSE.
 	mcold=1.d0
 	elbold=PIQ
 	eldold=PIQ
-endif
+!endif
 m=1.d0-mc
 if(abs(mc-mcold).lt.1.11d-16*mc) then
 	elb=elbold
@@ -917,13 +921,13 @@ end subroutine celbd
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine serbd(y,m,b,d)
 
-real*8 y,m,b,d
-real*8 F1,F2,F3,F4,F10,F20,F21,F30,F31,F40,F41,F42
-real*8 F5,F50,F51,F52,F6,F60,F61,F62,F63
-real*8 F7,F70,F71,F72,F73,F8,F80,F81,F82,F83,F84
-real*8 F9,F90,F91,F92,F93,F94
-real*8 FA,FA0,FA1,FA2,FA3,FA4,FA5
-real*8 FB,FB0,FB1,FB2,FB3,FB4,FB5
+real(dp) ::  y,m,b,d
+real(dp) ::  F1,F2,F3,F4,F10,F20,F21,F30,F31,F40,F41,F42
+real(dp) ::  F5,F50,F51,F52,F6,F60,F61,F62,F63
+real(dp) ::  F7,F70,F71,F72,F73,F8,F80,F81,F82,F83,F84
+real(dp) ::  F9,F90,F91,F92,F93,F94
+real(dp) ::  FA,FA0,FA1,FA2,FA3,FA4,FA5
+real(dp) ::  FB,FB0,FB1,FB2,FB3,FB4,FB5
 parameter (F10=1.d0/6.d0)
 parameter (F20=3.d0/40.d0)
 parameter (F21=2.d0/40.d0)
@@ -966,7 +970,7 @@ parameter (FB3=32175.d0/12058624.d0)
 parameter (FB4=30030.d0/12058624.d0)
 parameter (FB5=29106.d0/12058624.d0)
 
-real*8 A1,A2,A3,A4,A5,A6,A7,A8,A9,AA,AB
+real(dp) ::  A1,A2,A3,A4,A5,A6,A7,A8,A9,AA,AB
 parameter (A1=3.d0/5.d0)
 parameter (A2=5.d0/7.d0)
 parameter (A3=7.d0/9.d0)
@@ -979,8 +983,8 @@ parameter (A9=19.d0/21.d0)
 parameter (AA=21.d0/23.d0)
 parameter (AB=23.d0/25.d0)
 
-real*8 B1,B2,B3,B4,B5,B6,B7,B8,B9,BA,BB
-real*8 D0,D1,D2,D3,D4,D5,D6,D7,D8,D9,DA,DB
+real(dp) ::  B1,B2,B3,B4,B5,B6,B7,B8,B9,BA,BB
+real(dp) ::  D0,D1,D2,D3,D4,D5,D6,D7,D8,D9,DA,DB
 parameter (D0=1.d0/3.d0)
 
 ! write(*,*) "(serbd) y,m=",y,m
@@ -1035,8 +1039,8 @@ end subroutine serbd
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine relbd(phi,phic,mc,b,d)
 
-real*4 phi,phic,mc,b,d
-real*4 m,c,x,d2,z,k,bc,ec,dc,sz,v,t2
+real(sp) ::  phi,phic,mc,b,d
+real(sp) ::  m,c,x,d2,z,k,bc,ec,dc,sz,v,t2
 
 if(phi.lt.1.250) then
 ! write(*,*) "relsbd"
@@ -1083,9 +1087,9 @@ end subroutine relbd
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine relsbd(s0,mc,b,d)
 
-real*4 s0,mc,b,d
-real*4 m,del,s,y,sy
-real*4 yy(11),ss(11)
+real(sp) ::  s0,mc,b,d
+real(sp) ::  m,del,s,y,sy
+real(sp) ::  yy(11),ss(11)
 integer i, j
 
 ! write(*,*) "(relsbd) s0,m=",s0,m
@@ -1128,9 +1132,9 @@ end subroutine relsbd
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine relcbd(c0,mc,b,dx)
 
-real*4 c0,mc,b,dx
-real*4 c,x,y,s,m,d,sy
-real*4 yy(11),ss(11)
+real(sp) ::  c0,mc,b,dx
+real(sp) ::  c,x,y,s,m,d,sy
+real(sp) ::  yy(11),ss(11)
 integer j,i
 
 ! write(*,*) "(relcbd) c0,mc=",c0,mc
@@ -1190,38 +1194,38 @@ subroutine rcelbd(mc,elb,eld)
 !
 !     Outputs: elb = B(m), eld = D(m)
 !
-real*4 mc,elb,eld
-real*4 m,nome,dkkc,dddc,mx,kkc,logq2,elk,dele,elk1,delb
+real(sp) ::  mc,elb,eld
+real(sp) ::  m,nome,dkkc,dddc,mx,kkc,logq2,elk,dele,elk1,delb
 
-real*4 PIQ,PIHALF,PI,PIINV
+real(sp) ::  PIQ,PIHALF,PI,PIINV
 parameter (PIQ=0.78539816)
 parameter (PIHALF=1.57079633)
 parameter (PI=3.14159265)
 parameter (PIINV=0.318309886)
 
-real*4 mcold,elbold,eldold
-save mcold,elbold,eldold
+real(sp) ::  mcold,elbold,eldold
+!save mcold,elbold,eldold
 
-real*4 Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8
+real(sp) ::  Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8
 parameter (Q1=1.0/16.0,Q2=1.0/32.0,Q3=21.0/1024.0)
 parameter (Q4=31.0/2048.0,Q5=6257.0/524288.0)
 parameter (Q6=10293.0/1048576.0,Q7=279025.0/33554432.0)
 parameter (Q8=483127.0/67108864.0)
 
-real*4 K1,K2,K3,K4
+real(sp) ::  K1,K2,K3,K4
 parameter (K1=1.0/4.0)
 parameter (K2=9.0/64.0)
 parameter (K3=25.0/256.0)
 parameter (K4=1225.0/16384.0)
 
-real*4 B1,B2,B3,B4,B5
+real(sp) ::  B1,B2,B3,B4,B5
 parameter (B1=1.0/2.0)
 parameter (B2=1.0/16.0)
 parameter (B3=3.0/128.0)
 parameter (B4=25.0/2048.0)
 parameter (B5=245.0/32768.0)
 
-real*4 D1,D2,D3,D4,D5
+real(sp) ::  D1,D2,D3,D4,D5
 parameter (D1=1.0/2.0)
 parameter (D2=3.0/16.0)
 parameter (D3=15.0/128.0)
@@ -1230,12 +1234,12 @@ parameter (D5=2205.0/32768.0)
 
 logical first/.TRUE./
 
-if(first) then
+!if(first) then
     first=.FALSE.
 	mcold=1.0
 	elbold=PIQ
 	eldold=PIQ
-endif
+!endif
 m=1.0-mc
 if(abs(mc-mcold).lt.1.19e-7*mc) then
 	elb=elbold
@@ -1372,9 +1376,9 @@ end subroutine rcelbd
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine rserbd(y,m,b,d)
 
-real*4 y,m,b,d
-real*4 F1,F2,F3,F4,F10,F20,F21,F30,F31,F40,F41,F42
-real*4 F5,F50,F51,F52,F6,F60,F61,F62,F63
+real(sp) ::  y,m,b,d
+real(sp) ::  F1,F2,F3,F4,F10,F20,F21,F30,F31,F40,F41,F42
+real(sp) ::  F5,F50,F51,F52,F6,F60,F61,F62,F63
 parameter (F10=1.0/6.0)
 parameter (F20=3.0/40.0)
 parameter (F21=2.0/40.0)
@@ -1391,7 +1395,7 @@ parameter (F61=126.0/13312.0)
 parameter (F62=105.0/13312.0)
 parameter (F63=100.0/13312.0)
 
-real*8 A1,A2,A3,A4,A5,A6
+real(dp) ::  A1,A2,A3,A4,A5,A6
 parameter (A1=3.0/5.0)
 parameter (A2=5.0/7.0)
 parameter (A3=7.0/9.0)
@@ -1399,8 +1403,8 @@ parameter (A4=9.0/11.0)
 parameter (A5=11.0/13.0)
 parameter (A6=13.0/15.0)
 
-real*8 B1,B2,B3,B4,B5,B6
-real*8 D0,D1,D2,D3,D4,D5,D6
+real(dp) ::  B1,B2,B3,B4,B5,B6
+real(dp) ::  D0,D1,D2,D3,D4,D5,D6
 parameter (D0=1.0/3.0)
 
 ! write(*,*) "(rserbd) y,m=",y,m
