@@ -121,14 +121,14 @@ write(*,'(1x,2a10,2a25,2a10)') "m","phi","B","D","rB-B","rD-D"
 do j=1,jend
     mc=dble(j)*dmc
   m=1.d0-mc
-    rmc=mc
+    rmc=real(mc, sp)
     do i=0,iend*10
       phi=dphi*dble(i)
-        rphi=phi
+        rphi=real(phi, sp)
       call gelbd(phi,mc,b,d)
       call rgelbd(rphi,rmc,rb,rd)
-        rdb=(rb-b)/(1.d-16+abs(b))
-        rdd=(rd-d)/(1.d-16+abs(d))
+        rdb=real((rb-b)/(1.d-16+abs(b)), sp)
+        rdd=real((rd-d)/(1.d-16+abs(d)), sp)
         write(*,'(1x,0p2f10.5,1p2e25.15,1p2e10.2)') m,phi,b,d,rdb,rdd
   enddo
     write(*,'(1x)')
@@ -1423,7 +1423,7 @@ D4=F4*A4
 D5=F5*A5
 D6=F6*A6
 
-d=D0+y*(D1+y*(D2+y*(D3+y*(D4+y*(D5+y*D6)))))
+d=real(D0+y*(D1+y*(D2+y*(D3+y*(D4+y*(D5+y*D6))))), sp)
 
 B1=F1-D0
 B2=F2-D1
@@ -1432,7 +1432,7 @@ B4=F4-D3
 B5=F5-D4
 B6=F6-D5
 
-b=1.0+y*(B1+y*(B2+y*(B3+y*(B4+y*(B5+y*B6)))))
+b=real(1.0+y*(B1+y*(B2+y*(B3+y*(B4+y*(B5+y*B6))))), sp)
 
 ! write(*,*) "(rserbd) b,d=",b,d
 
