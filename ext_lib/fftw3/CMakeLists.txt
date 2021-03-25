@@ -16,7 +16,7 @@ else()
         PREFIX ${CMAKE_CURRENT_BINARY_DIR}
         CONFIGURE_COMMAND ""
         BUILD_COMMAND
-            ${CMAKE_CURRENT_BINARY_DIR}/src/fftw3_external/configure --with-pic --prefix=${STAGED_INSTALL_PREFIX} &&
+            ${CMAKE_CURRENT_BINARY_DIR}/src/fftw3_external/configure --enable-threads --enable-openmp --with-pic --prefix=${STAGED_INSTALL_PREFIX} &&
             make -j8 &&
             make install
         INSTALL_COMMAND ""
@@ -37,9 +37,34 @@ else()
         FORCE
       )
 
+      set(
+        FFTW_DOUBLE_THREADS_LIB ${STAGED_INSTALL_PREFIX}/lib/libfftw3_threads.a
+        CACHE PATH "Path to FFTW Threads"
+        FORCE
+      )
+
+      set(
+        FFTW_DOUBLE_OPENMP_LIB ${STAGED_INSTALL_PREFIX}/lib/libfftw3_omp.a
+        CACHE PATH "Path to FFTW OpenMP"
+        FORCE
+      )
+
       # Libraries
-      add_library(fftw3 STATIC IMPORTED)
-      set_property(TARGET fftw3 PROPERTY IMPORTED_LOCATION ${STAGED_INSTALL_PREFIX}/lib/libfftw3.a)
+      add_library(FFTW::Double INTERFACE IMPORTED)
+      set_target_properties(FFTW::Double
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFTW_INCLUDE_DIRS}"
+              INTERFACE_LINK_LIBRARIES "${FFTW_DOUBLE_LIB}"
+      )
+      add_library(FFTW::DoubleThreads INTERFACE IMPORTED)
+      set_target_properties(FFTW::DoubleThreads
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFTW_INCLUDE_DIRS}"
+              INTERFACE_LINK_LIBRARIES "${FFTW_DOUBLE_THREADS_LIB}"
+      )
+      add_library(FFTW::DoubleOpenMP INTERFACE IMPORTED)
+      set_target_properties(FFTW::DoubleOpenMP
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFTW_INCLUDE_DIRS}"
+              INTERFACE_LINK_LIBRARIES "${FFTW_DOUBLE_OPENMP_LIB}"
+      )
   endif()
   if(WIN32)
       ExternalProject_Add(fftw3_external
@@ -57,7 +82,6 @@ else()
 
       include(GNUInstallDirs)
 
-
       set(
         FFTW_ROOT ${STAGED_INSTALL_PREFIX}
         CACHE PATH "Path to internally built FFTW3Config.cmake"
@@ -70,12 +94,36 @@ else()
         FORCE
       )
 
+      set(
+        FFTW_DOUBLE_THREADS_LIB ${STAGED_INSTALL_PREFIX}/lib/libfftw3_threads.lib
+        CACHE PATH "Path to FFTW Threads"
+        FORCE
+      )
+
+      set(
+        FFTW_DOUBLE_THREADS_LIB ${STAGED_INSTALL_PREFIX}/lib/libfftw3_omp.lib
+        CACHE PATH "Path to FFTW OpenMP"
+        FORCE
+      )
+
       # Libraries
-      add_library(fftw3 STATIC IMPORTED)
-      set_property(TARGET fftw3 PROPERTY IMPORTED_LOCATION ${STAGED_INSTALL_PREFIX}/lib/fftw3.lib)
+      add_library(FFTW::Double INTERFACE IMPORTED)
+      set_target_properties(FFTW::Double
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFTW_INCLUDE_DIRS}"
+              INTERFACE_LINK_LIBRARIES "${FFTW_DOUBLE_LIB}"
+      )
+      add_library(FFTW::DoubleThreads INTERFACE IMPORTED)
+      set_target_properties(FFTW::DoubleThreads
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFTW_INCLUDE_DIRS}"
+              INTERFACE_LINK_LIBRARIES "${FFTW_DOUBLE_THREADS_LIB}"
+      )
+      add_library(FFTW::DoubleOpenMP INTERFACE IMPORTED)
+      set_target_properties(FFTW::DoubleOpenMP
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${FFTW_INCLUDE_DIRS}"
+              INTERFACE_LINK_LIBRARIES "${FFTW_DOUBLE_OPENMP_LIB}"
+      )
   endif()
 
-  add_dependencies(fftw3 fftw3_external)
   add_dependencies(opencsr fftw3_external)
   target_include_directories(opencsr PRIVATE ${STAGED_INSTALL_PREFIX}/include)
 endif()

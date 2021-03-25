@@ -55,6 +55,12 @@ endif()
 set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} ${bounds}")
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${dialect}")
 
+find_package(OpenMP QUIET)
+if(OPENMP_FOUND)
+    message(STATUS "OpenMP found. Enabling Fortran Flags: ${OpenMP_Fortran_FLAGS}.")
+    set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} ${OpenMP_Fortran_FLAGS}")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
+endif()
 
 #############################
 # OpenCSR Library
@@ -82,6 +88,11 @@ add_subdirectory(ext_lib)
 
 # Link to FFTW
 target_link_libraries(opencsr PUBLIC ${FFTW_DOUBLE_LIB})
+
+if(OPENMP_FOUND)
+    target_link_libraries(opencsr PUBLIC ${OpenMP_Fortran_LIBRARY} ${FFTW_DOUBLE_THREADS_LIB} ${FFTW_DOUBLE_OPENMP_LIB})
+endif()
+
 
 install(TARGETS opencsr LIBRARY)
 
