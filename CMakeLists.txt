@@ -25,6 +25,10 @@ endif()
 # Folder for helper modules (Find*.cmake)
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
+# Temporary path for FFTW in case we need to build it
+set(STAGED_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/stage)
+message(STATUS "${PROJECT_NAME} staged install: ${STAGED_INSTALL_PREFIX}")
+
 # this is where we will place the Fortran module files
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/mod)
 # this is where they will be installed
@@ -71,8 +75,7 @@ add_library(opencsr ${_sources})
 #target_link_libraries(opencsr PUBLIC GSL::gsl GSL::gslcblas)
 
 # Link to FFTW
-find_package(FFTW REQUIRED)
-target_link_libraries(opencsr PUBLIC FFTW::Float)
+target_link_libraries(opencsr PUBLIC ${FFTW_FLOAT_LIB})
 
 install(TARGETS opencsr LIBRARY)
 
@@ -103,3 +106,13 @@ else()
     message(FATAL_ERROR "System not UNIX nor WIN32 - not implemented yet")
   endif()
 endif()
+
+
+#############################
+# External Libraries
+#############################
+# Force FFTW to look for STATIC libraries that we need
+set(FFTW_USE_STATIC_LIBS ON)
+
+# External Libraries
+add_subdirectory(ext_lib)
