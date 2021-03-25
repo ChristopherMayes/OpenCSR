@@ -55,6 +55,7 @@ endif()
 set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} ${bounds}")
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${dialect}")
 
+
 #############################
 # OpenCSR Library
 #############################
@@ -69,13 +70,18 @@ list(APPEND _sources
 # opencsr library
 add_library(opencsr ${_sources})
 
-# Not needed, will use internal .f90 for elliptic integrals
-# Link to GSL
-#find_package(GSL REQUIRED)
-#target_link_libraries(opencsr PUBLIC GSL::gsl GSL::gslcblas)
+
+#############################
+# External Libraries
+#############################
+# Force FFTW to look for STATIC libraries that we need
+set(FFTW_USE_STATIC_LIBS ON)
+
+# External Libraries
+add_subdirectory(ext_lib)
 
 # Link to FFTW
-target_link_libraries(opencsr PUBLIC ${FFTW_FLOAT_LIB})
+target_link_libraries(opencsr PUBLIC ${FFTW_DOUBLE_LIB})
 
 install(TARGETS opencsr LIBRARY)
 
@@ -106,13 +112,3 @@ else()
     message(FATAL_ERROR "System not UNIX nor WIN32 - not implemented yet")
   endif()
 endif()
-
-
-#############################
-# External Libraries
-#############################
-# Force FFTW to look for STATIC libraries that we need
-set(FFTW_USE_STATIC_LIBS ON)
-
-# External Libraries
-add_subdirectory(ext_lib)
