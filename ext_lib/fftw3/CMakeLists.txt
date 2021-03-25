@@ -10,9 +10,9 @@ else()
   if(UNIX)
       ExternalProject_Add(fftw3_external
         URL
-          http://www.fftw.org/fftw-3.3.8.tar.gz
+          http://www.fftw.org/fftw-3.3.9.tar.gz
         URL_HASH
-          MD5=8aac833c943d8e90d51b697b27d4384d
+          MD5=50145bb68a8510b5d77605f11cadf8dc
         PREFIX ${CMAKE_CURRENT_BINARY_DIR}
         CONFIGURE_COMMAND ""
         BUILD_COMMAND
@@ -44,9 +44,9 @@ else()
   if(WIN32)
       ExternalProject_Add(fftw3_external
         URL
-          http://www.fftw.org/fftw-3.3.8.tar.gz
+          http://www.fftw.org/fftw-3.3.9.tar.gz
         URL_HASH
-          MD5=8aac833c943d8e90d51b697b27d4384d
+          MD5=50145bb68a8510b5d77605f11cadf8dc
         PREFIX ${CMAKE_CURRENT_BINARY_DIR}
         CONFIGURE_COMMAND ""
         BUILD_COMMAND ""
