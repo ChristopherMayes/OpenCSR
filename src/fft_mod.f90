@@ -25,10 +25,12 @@ else
   fdir = FFTW_FORWARD
 endif
 
-print *, 'fftw_execute_dft...'
+
+
+!! print *, 'fftw_execute_dft...'
 !$ n_threads = omp_get_max_threads()
 !$ if (n_threads > 1) then
-!$   print *, 'n_threads: ', n_threads
+!! !$   print *, 'n_threads: ', n_threads
 !$   call fftw_plan_with_nthreads(n_threads)
 !$ endif
 
@@ -38,7 +40,7 @@ call fftw_destroy_plan(plan)
 
 !$ if (n_threads > 1) call fftw_cleanup_threads()
 
-print *, '...done'
+!! print *, '...done'
 
 end subroutine
 

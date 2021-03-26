@@ -1,6 +1,8 @@
 
 module csr3d_mod
 
+! use ieee_arithmetic, only :  ieee_is_nan
+
 use, intrinsic :: iso_fortran_env
 use elliptic_integral_mod, only : ellipinc 
 use fft_mod, only : ccfft3d
@@ -36,6 +38,30 @@ end type
 contains
 
 
+
+! -----------------
+! -----------------
+! Write grid utility
+!
+subroutine write_2d(fname, grid)
+real(dp) :: grid(:,:)
+integer :: i, j, outfile
+character(*) :: fname
+
+open(newunit=outfile, file = trim(fname))
+
+write(outfile, *)  size(grid, 1)
+write(outfile, *)  size(grid, 2)
+do i = 1, size(grid, 1)
+  do j = 1, size(grid, 2)
+    write(outfile, *) grid(i, j)
+  enddo
+enddo  
+close(outfile)
+write(*,*) 'Grid written to ', trim(fname)  
+end subroutine
+! -----------------
+! -----------------
 
 
 !------------------------------------------------------------------------
@@ -149,6 +175,8 @@ real(dp), optional :: offset(3)
 real(dp) :: offset0(3), beta
 real(dp), parameter :: c_light = 299792458.0
 
+print *, 'csr3d_steady_state'
+
 if (.not. present(offset)) then
   offset0 = 0
 else
@@ -164,42 +192,41 @@ end subroutine csr3d_steady_state
 
 
 
-!------------------------------------------------------------------------
-!+
-! Subroutine calc_density_derivative(density, density_prime, dz)
-!
-! Input:
-!
-!
-! Output:
-!
-!-
-subroutine calc_density_derivative(density, density_prime, dz)
+subroutine calc_density_derivative_complex(density, density_prime, dz)
 real(dp), intent(in), dimension(:,:,:) :: density
 real(dp), intent(in) :: dz
-complex(dp), allocatable, dimension(:,:,:), intent(out) :: density_prime
-integer :: nz
+complex(dp), dimension(:,:,:), intent(inout) :: density_prime
+integer :: nx, ny, nz
+
+print *, 'calc_density_derivative...'
 
 ! Sizes
+nx = size(density, 1)
+ny = size(density, 2)
 nz = size(density, 3)
 
 ! Allocate double-sized arrays. This array will be placed in the first octant
-allocate( density_prime( 2*size(density, 1), 2*size(density, 2), 2*size(density, 3) ))
+!allocate( density_prime( 2*size(density, 1), 2*size(density, 2), 2*size(density, 3) ))
 density_prime = 0 ! Zero out everything
 
-! Endpoints: Simple backward and forward differences
-density_prime(:,:,1)  = (density(:,:,2)  - density(:,:,1))/dz
-density_prime(:,:,nz) = (density(:,:,nz) - density(:,:,nz-1))/dz
+! Endpoints: second order Forward and backwards stencils
+density_prime(1:nx,1:ny,1)  = (-(3/2)*density(:,:,1)    + 2*density(:,:,2)    -(1/2)*density(:,:,3) )/dz
+density_prime(1:nx,1:ny,nz) = ( (1/2)*density(:,:,nz-2) - 2*density(:,:,nz-1) +(3/2)*density(:,:,nz) )/dz
 
-! Central differences
-density_prime(:,:,2:nz-1) =  (density(:,:,3:nz) - density(:,:,1:nz-2))/(2*dz)
+! Second order central differences
+density_prime(1:nx,1:ny,2:nz-1) =  (density(:,:,3:nz) - density(:,:,1:nz-2))/(2*dz)
 !
+
+!print *, real(density_prime(size(density, 1), size(density, 2), :))
+!print *, density_prime
+print *, 'calc_density_derivative...Done'
+
 end subroutine
 
 
 !------------------------------------------------------------------------
 !+
-! Subroutine csr3d_steady_state_solver(rho, gamma, delta, efield, phi, offset)
+! Subroutine csr3d_steady_state_solver(rho, gamma, delta, wake, offset)
 !
 ! Deposits particle arrays onto mesh
 !
@@ -211,12 +238,12 @@ end subroutine
 !                        0: phi (scalar potential)
 !                       
 !
-!   efield        -- REAL64(:,:,:,3), optional: allocated electric field array to populate.
+!   wake        -- REAL64(:,:,:,3): allocated wakefield array to populate.
 !                      
 !                                     The final index corresponds to components
-!                                     1: Ex
-!                                     2: Ey
-!                                     3: Ez                                   
+!                                     1: Wx
+!                                     2: Wy
+!                                     3: Ws                                   
 !                                     If present, all components will be computed.    
 !
 !   phi           -- REAL64(:,:,:), optional: allocated potential array to populate
@@ -228,8 +255,7 @@ end subroutine
 !                        the field at z=+10 m relative to rho. 
 !
 ! Output:
-!   efield        -- REAL64(:,:,:,:) : electric field                                 
-!   phi           -- REAL64(:,:,:)   : potential
+!   wake        -- REAL64(:,:,:,3) :  3D CSR wake                          
 !
 !
 ! Notes: 
@@ -243,40 +269,60 @@ real(dp), intent(in) :: gamma, rho, delta(3)
 real(dp), optional, intent(out), dimension(:,:,:,:) :: wake
 real(dp), intent(in), optional :: offset(3)
 ! internal arrays
+real(dp), allocatable, dimension(:,:,:) :: density_prime
 complex(dp), allocatable, dimension(:,:,:) :: complex_density_prime, cgrn
-real(dp) :: factr, offset0=0
+real(dp) :: dx, dy, dz
+real(dp) :: factor, offset0=0
 real(dp), parameter :: clight=299792458.0
 real(dp), parameter :: fpei=299792458.0**2*1.00000000055d-7  ! this is 1/(4 pi eps0) after the 2019 SI changes
 
 integer :: nx, ny, nz, nx2, ny2, nz2
-integer :: icomp, ishift, jshift, kshift
+integer :: i, icomp, ishift, jshift, kshift
 
 ! Sizes
 nx = size(density, 1); ny = size(density, 2); nz = size(density, 3)
 nx2 = 2*nx; ny2 = 2*ny; nz2 = 2*nz; 
 
+! Grid spacings (conveniences)
+dx = delta(1); dy = delta(2); dz = delta(3)
+
 ! Allocate complex scratch arrays
+!allocate(density_prime(nx, ny, nz))
 allocate(cgrn(nx2, ny2, nz2))
+allocate(complex_density_prime(nx2, ny2, nz2))
+
 
 ! density -> d/dz density -> FFT 
 ! This will calculate d/dz density and place in the complex array
-call calc_density_derivative(density, complex_density_prime, delta(3))
+call calc_density_derivative_complex(density, complex_density_prime, dz)
+!call calc_density_derivative(density, density_prime, delta(3))
+!complex_density_prime = 0
+!complex_density_prime(1:nx, 1:ny, 1:nz) = density_prime
+
+call write_2d('density', density(:, ny/2, :))
+!call write_2d('density_prime', density_prime(:, ny/2, :))
+call write_2d('complex_density_prime', real(complex_density_prime(1:nx, ny/2, 1:nz)))
+
+! FFT complex density 
 call ccfft3d(complex_density_prime, complex_density_prime, [1,1,1], nx2, ny2, nz2, 0) 
 
 ! Loop over Gx, Gy, Gs
 do icomp=1, 3
-
-  call get_cgrn_csr3d(cgrn, delta, gamma, rho, icomp, offset=offset)
   
+  ! Get the green array
+  call get_cgrn_csr3d(cgrn, delta, gamma, rho, icomp, offset=offset)
+
+  ! This step fails because of NaN
   !  cgrn -> FFT(cgrn)
   call ccfft3d(cgrn, cgrn, [1,1,1], nx2, ny2, nz2, 0)  
-  
+   
+  print *,  "Multiply FFT'd arrays, re-use cgrn"
   ! Multiply FFT'd arrays, re-use cgrn
   cgrn=complex_density_prime*cgrn
 
   ! Inverse FFT
-  !call ccfft3d(cgrn, cgrn, [-1,-1,-1], nx2, ny2, nz2, 0)  
-  
+  call ccfft3d(cgrn, cgrn, [-1,-1,-1], nx2, ny2, nz2, 0)  
+
   ! This is where the output is shifted to
   ishift = nx-1
   jshift = ny-1
@@ -284,11 +330,15 @@ do icomp=1, 3
   
   ! Extract field
   ! ???? Factor
-  factr = fpei/(nx2*ny2*nz2)
-  
-  wake(:,:,:,icomp) = factr * real(cgrn(1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift), dp)
+  factor = dx*dy*dz/(nx2*ny2*nz2)
+  !print *, 'cgrn diagonal'
+  !do i=1, nx2
+  !  print *, i, real(cgrn(i,i,i), dp)
+  !enddo
+  !print *, 'shifts:', ishift, jshift, kshift
+  !print *, 'factor', factr, nx2, ny2, nz2
+  wake(:,:,:,icomp) = factor*real(cgrn(1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift), dp)
 
-    
 enddo
 
 end subroutine csr3d_steady_state_solver
@@ -338,8 +388,8 @@ real(dp), intent(in) :: gamma, rho
 real(dp), intent(in), optional :: offset(3)
 ! Local
 real(dp) :: dx,dy,dz
-real(dp) :: u,v,w, umin, vmin, wmin
-real(dp) :: gval, factor
+real(dp) :: x, y, z, xmin, ymin, zmin
+real(dp) :: gval
 integer :: imin, imax, jmin, jmax, kmin, kmax
 integer :: i,j,k, isize, jsize, ksize
 
@@ -350,50 +400,46 @@ integer :: i,j,k, isize, jsize, ksize
 
 dx=delta(1)/rho; dy=delta(2)/rho; dz=delta(3)/(2*rho)
 
-! ????
-factor = 1.0 /(dx*dy*dz)
-
 ! Grid min
 isize = size(cgrn,1); jsize=size(cgrn,2); ksize=size(cgrn,3)
-umin = (1-isize/2) *dx
-vmin = (1-jsize/2) *dy
-wmin = (1-ksize/2) *dz
+
+xmin = ( -isize/2 +1 ) *dx
+ymin = ( -jsize/2 +1 ) *dy
+zmin = ( -ksize/2 +1) *dz
 
 ! Add optional offset
 if (present(offset)) then
-  umin = umin + offset(1)/rho
-  vmin = vmin + offset(2)/rho
-  wmin = wmin + offset(3)/(2*rho)
+  xmin = xmin + offset(1)/rho
+  ymin = ymin + offset(2)/rho
+  zmin = zmin + offset(3)/(2*rho)
 endif
 
-! !$ print *, 'OpenMP Green function calc osc_get_cgrn_freespace'
+!$ print *, 'OpenMP Green function calc get_cgrn_csr3d'
 !$OMP PARALLEL DO &
 !$OMP DEFAULT(FIRSTPRIVATE), &
 !$OMP SHARED(cgrn)
 do k = 0, ksize-1
-  w = k*dz + wmin
+  z = k*dz + zmin
 
   do j=0, jsize-1
-    v=j*dy + vmin
+    y=j*dy + ymin
 
    do i=0, isize-1
-     u = i*dx + umin
+     x = i*dx + xmin
      
-     !gval=psi(u, w, v, gamma, icomp)*factor
-     !cgrn(i,j,k)= cmplx(gval, 0, dp)
+     cgrn(i,j,k) =  psi0(x, y, z, gamma, icomp, dx, dy, dz)
+     !cgrn(i,j,k) =  psi_s0(x, y, z, gamma)   ! TEST: fix to psi_s 
      
-     cgrn(i,j,k)=  psi(u, w, v, gamma, icomp)*factor
+     !if (y == 0) print *, x, z, gamma, cgrn(i,j,k)
      
     enddo
   enddo
 enddo
 !$OMP END PARALLEL DO
 
-
+!call write_2d('psi', real(cgrn(:, jsize/2-1 +1, :)))
 
 end subroutine get_cgrn_csr3d
-
-
 
 
 
@@ -408,27 +454,100 @@ elemental real(dp) function psi_s(x, y, z, gamma)
 real(dp), intent(in) :: x, y, z, gamma
 real(dp) :: beta, beta2, kap, alp
     
-beta2 = 1-1/gamma*2
-beta = sqrt(beta2)    
+  
+    
     
 ! Check for the origin
 if ((x == 0) .and. (y == 0) .and. (z == 0)) then
     psi_s = 0
 else
-    beta2 = beta**2
+    beta2 = 1-1/gamma**2
+    beta = sqrt(beta2)  
     
-    alp = alpha(x, y, z, beta2)
+    alp = alpha(x, y, z, gamma)
+    
     kap = 2*(alp - z)/beta ! Simpler form of kappa
     !kap = sqrt(x**2 + y**2 + 4*(1+x) * sin(alp)**2) 
     
     psi_s =  (cos(2*alp) - 1/(1+x)) / (kap - beta*(1+x)*sin(2*alp) )
+    
 endif
 end function psi_s
 
 
+
+
+
+
+
+
+
 !------------------------------------------------------------------------
 !+
-! elemental real(dp) function psi_x(x, y, z, gamma)
+real(dp) function psi0(x, y, z, gamma, icomp, dx, dy, dz)
+real(dp), intent(in) :: x, y, z, gamma, dx, dy, dz
+integer, intent(in) :: icomp
+select case (icomp)
+
+    case(1, 2)
+    ! x, y
+    ! There are singularities along these axes. Do simple average
+    ! TODO: tanh-sinh quadrature
+    if ((x == 0) .and. (y == 0)) then
+        ! Along z axis
+        psi0 = (psi(-dx/2, y, z, gamma, icomp) + psi( dx/2, y, z, gamma, icomp))/2
+ 
+    elseif ((y == 0) .and. (z == 0)) then
+        ! Along x axis
+        psi0 = (psi(x, -dy/2, z, gamma, icomp) + psi(x, dy/2, z, gamma, icomp))/2
+    else    
+        psi0 = psi(x, y, z, gamma, icomp)
+    endif
+    
+    case(3)
+    ! s
+    if ((x == 0) .and. (y == 0) .and. (z == 0)) then
+        ! Origin = 0
+        psi0 = 0
+    else
+        psi0 = psi(x, y, z, gamma, icomp)
+    endif
+    
+    case default
+        print *, 'error!'
+        stop
+    
+end select    
+end function
+
+
+
+! Conveniences
+
+real(dp) function psi_x0(x, y, z, gamma, dx, dy, dz)
+real(dp), intent(in) :: x, y, z, gamma, dx, dy, dz
+psi_x0 = psi0(x, y, z, gamma, 1, dx, dy, dz)
+end function
+
+real(dp) function psi_y0(x, y, z, gamma, dx, dy, dz)
+real(dp), intent(in) :: x, y, z, gamma, dx, dy, dz
+psi_y0 = psi0(x, y, z, gamma, 2, dx, dy, dz)
+end function
+
+
+real(dp) function psi_s0(x, y, z, gamma)
+real(dp), intent(in) :: x, y, z, gamma
+real(dp) :: dx=0, dy=0, dz=0
+    psi_s0 = psi0(x, y, z, gamma, 3, dx, dy, dz)
+end function
+
+
+
+
+
+!------------------------------------------------------------------------
+!+
+! elemental real(dp) function psi(x, y, z, gamma, icomp)
 !
 !
 ! Eq. 24 from Ref[X] without the prefactor e beta^2 / (2 rho^2)
@@ -447,7 +566,7 @@ integer, intent(in) :: icomp
 real(dp) :: beta, beta2, kap, alp
 real(dp) :: sin2a, cos2a, kap2, sin2a2, x2, y2, y4, xp, xp2, xy, xy2, f1, f2, arg2, f, e
 
-beta2 = 1-1/gamma*2
+beta2 = 1-1/gamma**2
 beta = sqrt(beta2)
 
 alp = alpha(x, y, z, gamma)
@@ -455,7 +574,11 @@ kap = 2*(alp - z)/beta ! Simpler form of kappa
 !kap = sqrt(x**2 + y**2 + 4*(1+x) * sin(alp)**2) 
 
 if (icomp == 3) then
-    psi = (cos(2*alp) - 1/(1+x)) / (kap - beta*(1+x)*sin(2*alp) )
+    if ((x == 0) .and. (y == 0) .and. (z == 0)) then
+      psi = 0
+    else
+      psi = (cos(2*alp) - 1/(1+x)) / (kap - beta*(1+x)*sin(2*alp) )
+    endif
     return
 endif
 
@@ -496,11 +619,11 @@ if (icomp == 1) then
 elseif (icomp == 2) then
 ! psi_y
     psi = y * ( &
-        F/xy - (x*(2+x)+y2)*E / ((y2+f2)*xy) &
-        - beta*(1-xp*cos2a) / (kap2-beta2*xp2*sin2a2) &
-        + kap*xp*( -(2+beta2)*y2 + (-2+beta2)*x*(2+x) ) * sin2a / ( (y4 + x2*f2 + 2*y2*f1)*( kap2-beta2*xp2*sin2a2 ) ) &
-        + kap*beta2*xp2*(y2 + x*(2+x))*sin2a*cos2a / ( ( y4 + x2*f2 + 2*y2*f1)*(kap2 -beta2*xp2*sin2a2)  ) &
-        )        
+            F/xy - (x*(2+x)+y2)*E / ((y2+f2)*xy) &
+            - beta*(1-xp*cos2a) / (kap2-beta2*xp2*sin2a2) &
+            + kap*xp*( -(2+beta2)*y2 + (-2+beta2)*x*(2+x) ) * sin2a / ( (y4 + x2*f2 + 2*y2*f1)*( kap2-beta2*xp2*sin2a2 ) ) &
+            + kap*beta2*xp2*(y2 + x*(2+x))*sin2a*cos2a / ( ( y4 + x2*f2 + 2*y2*f1)*(kap2 -beta2*xp2*sin2a2)  ) &
+            )      
 endif
 
 
@@ -519,10 +642,10 @@ end function psi
 !-
 elemental real(dp) function alpha(x, y, z, gamma)
 real(dp), intent(in) :: x, y, z, gamma
-real(dp) :: beta2, b, c, eta, nu, zeta,  omega3, m
+real(dp) :: beta2, b, c, eta, nu, zeta,  omega, omega3, m
 real(dp) :: arg1, arg2, arg3, temp
 
-beta2 = 1-1/gamma*2
+beta2 = 1-1/gamma**2
 
 if (z == 0.0) then
     ! Quadratic solution 
@@ -530,28 +653,29 @@ if (z == 0.0) then
     b = 3 * (1 - beta2 - beta2*x) / beta2 / (1+x)    
     c = -3*(x**2 + y**2)/(4*(1+x))
 
-    alpha = sqrt(-b + sqrt(b**2 - 4*c))/2
+    alpha = sqrt( (-b + sqrt(b**2 - 4*c))/2 )
     
 else    
     !Quartic solution 
-        
+                          
     ! Terms of the depressed quartic equation
     eta = -6 * z / (beta2 * (1+x))
     nu = 3 * (1/beta2 - 1 - x) / (1+x)
-    zeta = (3/4) * (4* z**2 /beta2 - x**2 - y**2) / (1+x)
-    
+    zeta = (3.0_dp/4.0_dp) * (4* z**2 /beta2 - x**2 - y**2) / (1+x)
+     
     ! Omega calc and cube root
     temp = (eta**2/16 - zeta * nu/6 + nu**3/216)  
-    omega3 =  (temp + sqrt(temp**2 - (zeta/3 + nu**2/36)**3))**(1/3)
-    
+    omega = temp + sqrt(temp**2 - (zeta/3 + nu**2/36)**3)
+    omega3 = omega**(1.0_dp/3.0_dp)   ! Do not forget the 1, 3 literals must be defined to double precision!!  
+
     ! Eq. (A2) from Ref[1]
     m = -nu/3 + (zeta/3 + nu**2/36) /omega3 + omega3
      
     arg1 = sqrt(2 * abs(m))
     arg2 = -2 * (m + nu)
     arg3 = 2 * eta / arg1
-    
-    if (z < 0) then
+        
+    if (z >= 0) then
         alpha =  (arg1 + sqrt(abs(arg2 - arg3)))/2
     else
         alpha = (-arg1 + sqrt(abs(arg2 + arg3)))/2
