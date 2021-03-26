@@ -90,12 +90,12 @@ call csr3d_steady_state(mesh3d)
 
 
 print *, '------------------------'
-print *, 'Writing lines, plane'
+print *, 'Writing lines, planes'
 !call write_lines(mesh3d, center(1), center(2), center(3))
 
-call write_line('x_lineout.dat', mesh3d, center, 'x')
-call write_line('y_lineout.dat', mesh3d, center, 'y')
-call write_line('z_lineout.dat', mesh3d, center, 'z')
+call write_line('x_line.dat', mesh3d, center, 'x')
+call write_line('y_line.dat', mesh3d, center, 'y')
+call write_line('z_line.dat', mesh3d, center, 'z')
 
 center = 0
 center(1) = -sigmas(1)
@@ -109,8 +109,14 @@ call write_line('z_line_-sigma_y.dat', mesh3d, center, 'z')
 center(2) = sigmas(2)
 call write_line('z_line_+sigma_y.dat', mesh3d, center, 'z')
 
-call write_plane(mesh3d)
+!call write_plane(mesh3d)
 
+center = 0
+call write_plane('xz_plane.dat', mesh3d, center, 'xz')
+center(2) = sigmas(2)
+call write_plane('xz_plane_+sigma_y.dat', mesh3d, center, 'xz')
+center(2) = -sigmas(2)
+call write_plane('xz_plane_-sigma_y.dat', mesh3d, center, 'xz')
 
 
 !call csr3d_calc()
@@ -221,10 +227,10 @@ end function
 !
 !-
 
-subroutine interpolate_field(x, y, z, mesh3d, wake)
+subroutine interpolate_field(x, y, z, mesh3d, wake, density)
 type(mesh3d_struct) ::  mesh3d
 real(dp) :: x, y, z
-real(dp) :: wake(3)
+real(dp), optional :: wake(3), density
 real(dp) :: hxi,hyi,hzi,ab,de,gh
 integer :: ip,jp,kp,ip1,jp1,kp1
 integer :: nflag
@@ -278,22 +284,37 @@ ip1=ip+1
 jp1=jp+1
 kp1=kp+1
 
+if (present(wake)) then
+    wake=mesh3d%wake(ip, jp,  kp,  :)*ab*de*gh                 &
+     +mesh3d%wake(ip, jp1, kp,  :)*ab*(1.-de)*gh            &
+     +mesh3d%wake(ip, jp1, kp1, :)*ab*(1.-de)*(1.-gh)       &
+     +mesh3d%wake(ip, jp,  kp1, :)*ab*de*(1.-gh)            &
+     +mesh3d%wake(ip1,jp,  kp1, :)*(1.-ab)*de*(1.-gh)       &
+     +mesh3d%wake(ip1,jp1, kp1, :)*(1.-ab)*(1.-de)*(1.-gh)  &
+     +mesh3d%wake(ip1,jp1, kp,  :)*(1.-ab)*(1.-de)*gh       &
+     +mesh3d%wake(ip1,jp,  kp,  :)*(1.-ab)*de*gh
+endif
 
-wake=mesh3d%wake(ip, jp,  kp,  :)*ab*de*gh                 &
- +mesh3d%wake(ip, jp1, kp,  :)*ab*(1.-de)*gh            &
- +mesh3d%wake(ip, jp1, kp1, :)*ab*(1.-de)*(1.-gh)       &
- +mesh3d%wake(ip, jp,  kp1, :)*ab*de*(1.-gh)            &
- +mesh3d%wake(ip1,jp,  kp1, :)*(1.-ab)*de*(1.-gh)       &
- +mesh3d%wake(ip1,jp1, kp1, :)*(1.-ab)*(1.-de)*(1.-gh)  &
- +mesh3d%wake(ip1,jp1, kp,  :)*(1.-ab)*(1.-de)*gh       &
- +mesh3d%wake(ip1,jp,  kp,  :)*(1.-ab)*de*gh
+if (present(density)) then
+    density=mesh3d%density(ip, jp,  kp  )*ab*de*gh                 &
+          +mesh3d%density(ip, jp1, kp  )*ab*(1.-de)*gh            &
+          +mesh3d%density(ip, jp1, kp1 )*ab*(1.-de)*(1.-gh)       &
+          +mesh3d%density(ip, jp,  kp1 )*ab*de*(1.-gh)            &
+          +mesh3d%density(ip1,jp,  kp1 )*(1.-ab)*de*(1.-gh)       &
+          +mesh3d%density(ip1,jp1, kp1 )*(1.-ab)*(1.-de)*(1.-gh)  &
+          +mesh3d%density(ip1,jp1, kp  )*(1.-ab)*(1.-de)*gh       &
+          +mesh3d%density(ip1,jp,  kp  )*(1.-ab)*de*gh
+endif
 
 
 end subroutine
 
 
 
-
+! -----------------
+! -----------------
+!! Write line utility
+!!
 subroutine write_line(fname, mesh3d, center, axis)
 type(mesh3d_struct) :: mesh3d
 real(dp) :: center(3), x, y, z, wake(3)
@@ -309,7 +330,7 @@ case('x')
     y = center(2)
     do i = 1, mesh3d%size(1) -1 ! skip last point
       x = (i-1)*mesh3d%delta(1) + mesh3d%min(1) 
-      call interpolate_field(x, y, z, mesh3d, wake)
+      call interpolate_field(x, y, z, mesh3d, wake=wake)
       write(outfile, '(6(1pe14.7,1x))') x,y,z, wake(1:3)
     enddo  
 
@@ -318,7 +339,7 @@ x = center(1)
     z = center(3)
     do i = 1, mesh3d%size(2) -1 ! skip last point
       y = (i-1)*mesh3d%delta(2) + mesh3d%min(2) 
-      call interpolate_field(x, y, z, mesh3d,wake)
+      call interpolate_field(x, y, z, mesh3d, wake=wake)
       write(outfile, '(6(1pe14.7,1x))') x,y,z, wake(1:3)
     enddo  
 
@@ -327,7 +348,7 @@ case('z')
     y = center(2)
     do i = 1, mesh3d%size(3) -1 ! skip last point
       z = (i-1)*mesh3d%delta(3) + mesh3d%min(3) 
-      call interpolate_field(x, y, z, mesh3d, wake)
+      call interpolate_field(x, y, z, mesh3d, wake=wake)
       write(outfile, '(6(1pe14.7,1x))') x,y,z,wake(1:3)
     enddo
 end select
@@ -335,61 +356,37 @@ end select
 close(outfile) 
 end subroutine
 
-subroutine write_lines(mesh3d, xcent, ycent, zcent)
+
+! -----------------
+! -----------------
+!! Write plane utility
+!!
+subroutine write_plane(fname, mesh3d, center, axes)
 type(mesh3d_struct) :: mesh3d
-real(dp) :: x, y, z, wake(3), xcent,ycent,zcent 
-integer :: i, outfile
-
-open(newunit=outfile, file = 'x_lineout.dat')
-z = zcent
-y = ycent 
-do i = 1, mesh3d%size(1) -1 ! skip last point
-  x = (i-1)*mesh3d%delta(1) + mesh3d%min(1) 
-  call interpolate_field(x, y, z, mesh3d, wake)
-! write(outfile, *) x, wake(1)
-  write(outfile, '(6(1pe14.7,1x))') x,y,z, wake(1:3)
-enddo  
-close(outfile) 
-
-open(newunit=outfile, file = 'y_lineout.dat')
-x = xcent
-z = zcent 
-do i = 1, mesh3d%size(2) -1 ! skip last point
-  y = (i-1)*mesh3d%delta(2) + mesh3d%min(2) 
-  call interpolate_field(x, y, z, mesh3d,wake)
-! write(outfile, *) y, wake(2)
-  write(outfile, '(6(1pe14.7,1x))') x,y,z, wake(1:3)
-enddo  
-close(outfile) 
-
-open(newunit=outfile, file = 'z_lineout.dat')
-x = xcent
-y = ycent
-do i = 1, mesh3d%size(3) -1 ! skip last point
-  z = (i-1)*mesh3d%delta(3) + mesh3d%min(3) 
-  call interpolate_field(x, y, z, mesh3d, wake)
-! write(outfile, *) z, wake(3)
-  write(outfile, '(6(1pe14.7,1x))') x,y,z,wake(1:3)
-enddo  
-close(outfile)  
-end subroutine
-
-
-subroutine write_plane(mesh3d)
-type(mesh3d_struct) :: mesh3d
-real(dp) :: x, y, z, wake(3)
+real(dp) :: center(3), x, y, z, wake(3), density
 integer :: i, k, outfile
+character(*) :: fname
+character(2) :: axes
 
-open(newunit=outfile, file = 'x_z_Wx_Wy_Ws.dat')
-y = 0 
+open(newunit=outfile,  file = trim(fname))
+
+write(outfile, '(6(a, 1x))') 'x', 'z', 'Wx', 'Wy', 'Ws', 'density'
+
+select case(axes)
+case('xz')
+y = center(2)
 do k = 1, mesh3d%size(3) -1 ! skip last point
   z = (k-1)*mesh3d%delta(3) + mesh3d%min(3) 
   do i = 1, mesh3d%size(1) -1 ! skip last point
     x = (i-1)*mesh3d%delta(1) + mesh3d%min(1) 
-    call interpolate_field(x, y, z, mesh3d, wake)
-    write(outfile, *) x, z, wake(1), wake(2), wake(3)
+    call interpolate_field(x, y, z, mesh3d, wake=wake, density=density)
+    write(outfile, *) x, z, wake(1), wake(2), wake(3), density
   enddo
 enddo  
+
+
+end select
+
 close(outfile)  
 end subroutine
 

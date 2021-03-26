@@ -299,9 +299,10 @@ call calc_density_derivative_complex(density, complex_density_prime, dz)
 !complex_density_prime = 0
 !complex_density_prime(1:nx, 1:ny, 1:nz) = density_prime
 
-call write_2d('density', density(:, ny/2, :))
+! Debug:
+!call write_2d('density', density(:, ny/2, :))
 !call write_2d('density_prime', density_prime(:, ny/2, :))
-call write_2d('complex_density_prime', real(complex_density_prime(1:nx, ny/2, 1:nz)))
+!call write_2d('complex_density_prime', real(complex_density_prime(1:nx, ny/2, 1:nz)))
 
 ! FFT complex density 
 call ccfft3d(complex_density_prime, complex_density_prime, [1,1,1], nx2, ny2, nz2, 0) 
