@@ -36,6 +36,8 @@ contains
 !
 !   gamma        -- REAL64: relativistic gamma
 !
+!   rho          -- REAL64: bending radius. Can be positive or negative.
+!
 !   icomp        -- integer: Field component requested:
 !                        0: phi (scalar potential)
 !                       
@@ -75,6 +77,7 @@ real(dp), intent(in) :: gamma, rho, delta(3)
 real(dp), optional, intent(out), dimension(:,:,:,:) :: wake
 real(dp), intent(in), optional :: offset(3)
 logical, optional :: normalize
+logical :: normalize0
 ! internal arrays
 real(dp), allocatable, dimension(:,:,:) :: density_prime
 complex(dp), allocatable, dimension(:,:,:) :: complex_density_prime, cgrn
@@ -86,6 +89,9 @@ real(dp), parameter :: fpei=299792458.0**2*1.00000000055d-7  ! this is 1/(4 pi e
 integer :: nx, ny, nz, nx2, ny2, nz2
 integer :: i, icomp, ishift, jshift, kshift
 
+! optional normalization
+normalize0 = .true.
+if (present(normalize)) normalize0 = normalize
 
 ! Sizes
 nx = size(density, 1); ny = size(density, 2); nz = size(density, 3)
@@ -94,11 +100,7 @@ nx2 = 2*nx; ny2 = 2*ny; nz2 = 2*nz;
 ! Grid spacings (conveniences)
 dx = delta(1); dy = delta(2); dz = delta(3)
 
-! Factor for normalized 1/m^2 units, or V/m
-factor = dx*dy*dz/(nx2*ny2*nz2)
-if (present(normalize)) then
-  if (.not. normalize) factor = fpei/rho * dx*dy*dz/(nx2*ny2*nz2)
-endif
+
 
 
 ! Allocate complex scratch arrays
@@ -139,6 +141,15 @@ do icomp=1, 3
   ! Inverse FFT
   call ccfft3d(cgrn, cgrn, [-1,-1,-1], nx2, ny2, nz2, 0)  
 
+
+  ! Factor for normalized 1/m^2 units, or V/m
+  if (normalize0) then
+    factor = dx*dy*dz/(nx2*ny2*nz2)
+  else
+    ! Green function handles negative rho
+    factor = fpei/abs(rho) * dx*dy*dz/(nx2*ny2*nz2)
+   endif
+  
   ! This is where the output is shifted to
   ishift = nx-1
   jshift = ny-1
@@ -211,6 +222,8 @@ end subroutine
 !   
 !                
 ! Notes:
+!   Internal formulas are for rho > 0
+!   
 !   Internally, mesh spacings in scaled units
 !   x - > x/rho
 !   y ->  y/rho
@@ -237,20 +250,21 @@ integer :: i,j,k, isize, jsize, ksize
 ! y ->  y/rho
 ! z ->  z/(2*rho)
 
-dx=delta(1)/rho; dy=delta(2)/rho; dz=delta(3)/(2*abs(rho)) ! Should account for negative rho
+
+dx=delta(1)/rho; dy=delta(2)/abs(rho); dz=delta(3)/abs(2*rho) ! This will handle negative rho
 
 ! Grid min
 isize = size(cgrn,1); jsize=size(cgrn,2); ksize=size(cgrn,3)
 
 xmin = ( -isize/2 +1 ) *dx
 ymin = ( -jsize/2 +1 ) *dy
-zmin = ( -ksize/2 +1) *dz
+zmin = ( -ksize/2 +1 ) *dz
 
 ! Add optional offset
 if (present(offset)) then
-  xmin = xmin + offset(1)/rho
-  ymin = ymin + offset(2)/rho
-  zmin = zmin + offset(3)/(2*abs(rho))
+  xmin = xmin + offset(1)/abs(rho)  ! Do not flip the sign of the offset. 
+  ymin = ymin + offset(2)/abs(rho)
+  zmin = zmin + offset(3)/abs(2*rho)
 endif
 
 !$ print *, 'OpenMP Green function calc get_cgrn_csr3d'
@@ -265,16 +279,16 @@ do k = 0, ksize-1
 
    do i=0, isize-1
      x = i*dx + xmin
-     
-     cgrn(i,j,k) =  psi0(x, y, z, gamma, icomp, dx, dy, dz)
-     !cgrn(i,j,k) =  psi_s0(x, y, z, gamma)   ! TEST: fix to psi_s 
-     
-     !if (y == 0) print *, x, z, gamma, cgrn(i,j,k)
+    
+     cgrn(i,j,k) =  psi0(x, y, z, gamma, icomp, abs(dx), dy, dz)
      
     enddo
   enddo
 enddo
 !$OMP END PARALLEL DO
+
+! Flip psi_x sign for negative rho
+if (icomp == 1 .and. rho < 0) cgrn = -cgrn
 
 !call write_2d('psi', real(cgrn(:, jsize/2-1 +1, :)))
 
