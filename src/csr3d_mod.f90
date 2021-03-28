@@ -68,6 +68,20 @@ contains
 !
 ! Notes: 
 !
+!   This algorithm is ultimately memory limited. For each component, two complex,
+!   double-sized arrays are needed, requiring the following:
+!   Bytes per component calc = nx*ny*nz * 2 (arrays of complex numbers) *
+!            2^3 (double-sized 3D arrays) * 128 (bits/complex number) / 8 (bits/Bytes)
+!         = 256 Bytes * nx*ny*nz
+!   Some examples:
+!      32x32x32    =>   8 MB
+!      64x64x64    =>  67 MB
+!      128x128x128 => 538 MB
+!      256x256x256 => 4.3 GB
+!      512x512x512 =>  34 GB
+!   For smaller grid sizes, the algorithm could be improved by calculating all three
+!   Green function arrays at the same time. 
+!
 !-
 subroutine csr3d_steady_state_solver(density, gamma, rho, delta, wake, offset, normalize)
 
@@ -148,7 +162,7 @@ do icomp=1, 3
   else
     ! Green function handles negative rho
     factor = fpei/abs(rho) * dx*dy*dz/(nx2*ny2*nz2)
-   endif
+  endif
   
   ! This is where the output is shifted to
   ishift = nx-1
