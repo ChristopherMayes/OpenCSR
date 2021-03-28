@@ -4,23 +4,54 @@ use, intrinsic :: iso_fortran_env
 use csr3d_mod
 
 implicit none
+integer, parameter :: dp = REAL64
+
+!type mesh3d_struct
+!  integer :: size(3) = [64, 64, 64]     ! Grid shape
+!  real(dp) :: min(3)                    ! Minimim in each dimension
+!  real(dp) :: max(3)                    ! Maximum in each dimension
+!  real(dp) :: delta(3)                  ! Grid spacing
+!  real(dp) :: gamma                     ! Relativistic gamma
+!  real(dp) :: charge                    ! Total charge on mesh
+!  real(dp), allocatable, dimension(:,:,:) :: density        ! Charge density grid
+!  real(dp), allocatable, dimension(:,:,:,:) :: wake        ! wake grid
+!end type
+
+! Compatibility with OpenSpaceCharge
+type mesh3d_struct
+  integer :: nlo(3) = [ 1,  1,  1]       ! Lowest  grid index in x, y, z (m) of rho and the quantity being computed (phi or E)
+  integer :: nhi(3) = [64, 64, 64]       ! Highest grid index in x, y, z (m) of rho and the quantity being computed (phi or E)
+  integer :: npad(3) = [ 1,  1,  1]      ! Array padding for cyclic convolution
+  real(dp) :: min(3)                    ! Minimim in each dimension
+  real(dp) :: max(3)                    ! Maximum in each dimension
+  real(dp) :: delta(3)                  ! Grid spacing
+  real(dp) :: gamma                     ! Relativistic gamma
+  real(dp) :: charge                    ! Total charge on mesh
+  real(dp), allocatable, dimension(:,:,:) :: rho        ! Charge density grid
+  real(dp), allocatable, dimension(:,:,:) :: phi        ! electric potential grid
+  real(dp), allocatable, dimension(:,:,:,:) :: efield   ! electric field grid
+  real(dp), allocatable, dimension(:,:,:,:) :: bfield   ! magnetic field grid
+end type
+
+
 
 type(mesh3d_struct) :: mesh3d
-integer, parameter :: dp = REAL64
+
 
 
 
 real(dp) :: gamma, rho, sigmas(3), gauss_cutoff
 real(dp) :: center(3), x0, y0, z0, dummy
 integer ::  sizes(3)
-
+logical :: normalize
 
 ! File handling
 character(200) :: in_file
 integer :: open_status, namelist_file
 namelist / csr3d_test_params / &
   sizes, gamma, rho, &
-  sigmas, gauss_cutoff, center
+  sigmas, gauss_cutoff, center, &
+  normalize
 
 !--------------
 !Namelist defaults
@@ -30,6 +61,7 @@ sizes = [4,4,4]
 sigmas = [10.0e-6_dp, 10.0e-6_dp, 10.0e-6_dp]
 gauss_cutoff = 5.0
 center = [0.0_dp, 0.0_dp, 0.0_dp]
+normalize = .true.  ! Use normalized units 1/m^2, otherwise V/m
 
 !Read namelist
 in_file = 'test_opensc.in'
@@ -65,28 +97,27 @@ print *, '------------------------'
 !stop
 
 
-mesh3d%size = sizes
+mesh3d%nhi = sizes
 print *, 'Gaussian mesh'
 call gaussian_mesh(mesh3d, sigmas, gauss_cutoff)
 
-!call calc_density_derivative(mesh3d%density, mesh3d%density_prime, mesh3d%delta(3))
+!call calc_density_derivative(mesh3d%rho, mesh3d%rho_prime, mesh3d%delta(3))
 
 !print *, '------------------------'
 !print *, 'Writing 2d density'
-!call write_2d('density0', mesh3d%density(:,sizes(2)/2,:))
+!call write_2d('density0', mesh3d%rho(:,sizes(2)/2,:))
 !print *, 'sizes(2)/2', sizes(2)/2
-!call write_2d('density0_prime', mesh3d%density_prime(:,sizes(2)/2,:))
+!call write_2d('density0_prime', mesh3d%rho_prime(:,sizes(2)/2,:))
 !
 
 
-mesh3d%rho = rho
 mesh3d%gamma = gamma
 call print_mesh3d(mesh3d)
 
 
 print *, '------------------------'
 print *, 'csr3d_steady_state'
-call csr3d_steady_state(mesh3d)
+call csr3d_steady_state(mesh3d, rho)
 
 
 print *, '------------------------'
@@ -141,22 +172,21 @@ real(dp) :: x, y, z, sigmas(3), cutoff
 real(dp) :: dx, dy, dz, xmin, ymin, zmin, norm
 integer :: i, j, k, isize, jsize, ksize
 
-if (.not. allocated(mesh3d%density)) then
-  allocate(mesh3d%density(mesh3d%size(1), mesh3d%size(2), mesh3d%size(3)))
-  allocate(mesh3d%density_prime(mesh3d%size(1), mesh3d%size(2), mesh3d%size(3)))
-  allocate(mesh3d%wake(mesh3d%size(1), mesh3d%size(2), mesh3d%size(3), 3))   
+if (.not. allocated(mesh3d%rho)) then
+  allocate(mesh3d%rho(mesh3d%nhi(1), mesh3d%nhi(2), mesh3d%nhi(3)))
+  allocate(mesh3d%efield(mesh3d%nhi(1), mesh3d%nhi(2), mesh3d%nhi(3), 3))   
 endif
 
 
 ! Fill mesh
 mesh3d%min   = -cutoff*sigmas
 mesh3d%max   =  cutoff*sigmas
-mesh3d%delta = (mesh3d%max - mesh3d%min)/(mesh3d%size-1)
+mesh3d%delta = (mesh3d%max - mesh3d%min)/(mesh3d%nhi-1)
 
 ! Convenient local variables. 
-isize = mesh3d%size(1)
-jsize = mesh3d%size(2)
-ksize = mesh3d%size(3)
+isize = mesh3d%nhi(1)
+jsize = mesh3d%nhi(2)
+ksize = mesh3d%nhi(3)
 
 dx = mesh3d%delta(1)
 dy = mesh3d%delta(2)
@@ -174,16 +204,16 @@ do k = 1, ksize
    do i=1, isize
      x = (i-1)*dx + xmin
      
-     mesh3d%density(i,j,k)= gauss3(x, y, z, sigmas(1), sigmas(2), sigmas(3))
-     mesh3d%density_prime(i,j,k)= gauss3_prime(x, y, z, sigmas(1), sigmas(2), sigmas(3))
+     mesh3d%rho(i,j,k)= gauss3(x, y, z, sigmas(1), sigmas(2), sigmas(3))
+    ! mesh3d%rho_prime(i,j,k)= gauss3_prime(x, y, z, sigmas(1), sigmas(2), sigmas(3))
      
     enddo
   enddo
 enddo
 
 ! Normalize
-norm = sum(mesh3d%density) * dx * dy * dz
-mesh3d%density  = mesh3d%density / norm
+norm = sum(mesh3d%rho) * dx * dy * dz
+mesh3d%rho  = mesh3d%rho / norm
 
 
 end subroutine 
@@ -240,27 +270,27 @@ ip=floor((x-mesh3d%min(1))*hxi+1)
 jp=floor((y-mesh3d%min(2))*hyi+1)
 kp=floor((z-mesh3d%min(3))*hzi+1)
 
-if(ip<1 .or. ip>mesh3d%size(1)-1)then
+if(ip<1 .or. ip>mesh3d%nhi(1)-1)then
   nflag=1
   write(6,*)'ierror: ip=', ip, (x-mesh3d%min(1)), (x-mesh3d%min(1))/mesh3d%delta(1)
   if(ip<1)then
     ip=1
   else
-    ip=mesh3d%size(1)-1
+    ip=mesh3d%nhi(1)-1
   endif
 endif
-if(jp<1 .or. jp>mesh3d%size(2)-1)then
+if(jp<1 .or. jp>mesh3d%nhi(2)-1)then
   nflag=1
   write(6,*)'jerror: jp=', jp, (y-mesh3d%min(2)), (y-mesh3d%min(2))/mesh3d%delta(2)
   write(6,*)ab,de,gh
   if(jp<1)then
     jp=1
   else
-    jp=mesh3d%size(2)-1
+    jp=mesh3d%nhi(2)-1
   endif
 endif
   
-if(kp<1 .or. kp>mesh3d%size(3)-1)then
+if(kp<1 .or. kp>mesh3d%nhi(3)-1)then
     nflag=1
     write(6,*)'kerror:  kp=',kp
     write(6,*)'z=',z
@@ -269,7 +299,7 @@ if(kp<1 .or. kp>mesh3d%size(3)-1)then
   if(kp<1)then
     kp=1
   else
-    kp=mesh3d%size(3)-1
+    kp=mesh3d%nhi(3)-1
   endif
 endif
 ab=((mesh3d%min(1)-x)+ip*mesh3d%delta(1))*hxi
@@ -285,25 +315,25 @@ jp1=jp+1
 kp1=kp+1
 
 if (present(wake)) then
-    wake=mesh3d%wake(ip, jp,  kp,  :)*ab*de*gh                 &
-     +mesh3d%wake(ip, jp1, kp,  :)*ab*(1.-de)*gh            &
-     +mesh3d%wake(ip, jp1, kp1, :)*ab*(1.-de)*(1.-gh)       &
-     +mesh3d%wake(ip, jp,  kp1, :)*ab*de*(1.-gh)            &
-     +mesh3d%wake(ip1,jp,  kp1, :)*(1.-ab)*de*(1.-gh)       &
-     +mesh3d%wake(ip1,jp1, kp1, :)*(1.-ab)*(1.-de)*(1.-gh)  &
-     +mesh3d%wake(ip1,jp1, kp,  :)*(1.-ab)*(1.-de)*gh       &
-     +mesh3d%wake(ip1,jp,  kp,  :)*(1.-ab)*de*gh
+    wake=mesh3d%efield(ip, jp,  kp,  :)*ab*de*gh                 &
+     +mesh3d%efield(ip, jp1, kp,  :)*ab*(1.-de)*gh            &
+     +mesh3d%efield(ip, jp1, kp1, :)*ab*(1.-de)*(1.-gh)       &
+     +mesh3d%efield(ip, jp,  kp1, :)*ab*de*(1.-gh)            &
+     +mesh3d%efield(ip1,jp,  kp1, :)*(1.-ab)*de*(1.-gh)       &
+     +mesh3d%efield(ip1,jp1, kp1, :)*(1.-ab)*(1.-de)*(1.-gh)  &
+     +mesh3d%efield(ip1,jp1, kp,  :)*(1.-ab)*(1.-de)*gh       &
+     +mesh3d%efield(ip1,jp,  kp,  :)*(1.-ab)*de*gh
 endif
 
 if (present(density)) then
-    density=mesh3d%density(ip, jp,  kp  )*ab*de*gh                 &
-          +mesh3d%density(ip, jp1, kp  )*ab*(1.-de)*gh            &
-          +mesh3d%density(ip, jp1, kp1 )*ab*(1.-de)*(1.-gh)       &
-          +mesh3d%density(ip, jp,  kp1 )*ab*de*(1.-gh)            &
-          +mesh3d%density(ip1,jp,  kp1 )*(1.-ab)*de*(1.-gh)       &
-          +mesh3d%density(ip1,jp1, kp1 )*(1.-ab)*(1.-de)*(1.-gh)  &
-          +mesh3d%density(ip1,jp1, kp  )*(1.-ab)*(1.-de)*gh       &
-          +mesh3d%density(ip1,jp,  kp  )*(1.-ab)*de*gh
+    density=mesh3d%rho(ip, jp,  kp  )*ab*de*gh                 &
+          +mesh3d%rho(ip, jp1, kp  )*ab*(1.-de)*gh            &
+          +mesh3d%rho(ip, jp1, kp1 )*ab*(1.-de)*(1.-gh)       &
+          +mesh3d%rho(ip, jp,  kp1 )*ab*de*(1.-gh)            &
+          +mesh3d%rho(ip1,jp,  kp1 )*(1.-ab)*de*(1.-gh)       &
+          +mesh3d%rho(ip1,jp1, kp1 )*(1.-ab)*(1.-de)*(1.-gh)  &
+          +mesh3d%rho(ip1,jp1, kp  )*(1.-ab)*(1.-de)*gh       &
+          +mesh3d%rho(ip1,jp,  kp  )*(1.-ab)*de*gh
 endif
 
 
@@ -328,7 +358,7 @@ select case(axis)
 case('x')
     z = center(3)
     y = center(2)
-    do i = 1, mesh3d%size(1) -1 ! skip last point
+    do i = 1, mesh3d%nhi(1) -1 ! skip last point
       x = (i-1)*mesh3d%delta(1) + mesh3d%min(1) 
       call interpolate_field(x, y, z, mesh3d, wake=wake)
       write(outfile, '(6(1pe14.7,1x))') x,y,z, wake(1:3)
@@ -337,7 +367,7 @@ case('x')
 case('y')
 x = center(1)
     z = center(3)
-    do i = 1, mesh3d%size(2) -1 ! skip last point
+    do i = 1, mesh3d%nhi(2) -1 ! skip last point
       y = (i-1)*mesh3d%delta(2) + mesh3d%min(2) 
       call interpolate_field(x, y, z, mesh3d, wake=wake)
       write(outfile, '(6(1pe14.7,1x))') x,y,z, wake(1:3)
@@ -346,7 +376,7 @@ x = center(1)
 case('z')
     x = center(1)
     y = center(2)
-    do i = 1, mesh3d%size(3) -1 ! skip last point
+    do i = 1, mesh3d%nhi(3) -1 ! skip last point
       z = (i-1)*mesh3d%delta(3) + mesh3d%min(3) 
       call interpolate_field(x, y, z, mesh3d, wake=wake)
       write(outfile, '(6(1pe14.7,1x))') x,y,z,wake(1:3)
@@ -375,9 +405,9 @@ write(outfile, '(6(a, 1x))') 'x', 'z', 'Wx', 'Wy', 'Ws', 'density'
 select case(axes)
 case('xz')
 y = center(2)
-do k = 1, mesh3d%size(3) -1 ! skip last point
+do k = 1, mesh3d%nhi(3) -1 ! skip last point
   z = (k-1)*mesh3d%delta(3) + mesh3d%min(3) 
-  do i = 1, mesh3d%size(1) -1 ! skip last point
+  do i = 1, mesh3d%nhi(1) -1 ! skip last point
     x = (i-1)*mesh3d%delta(1) + mesh3d%min(1) 
     call interpolate_field(x, y, z, mesh3d, wake=wake, density=density)
     write(outfile, *) x, z, wake(1), wake(2), wake(3), density
@@ -413,6 +443,75 @@ end subroutine
 !end subroutine
 !! -----------------
 ! -----------------
+
+
+
+
+!------------------------------------------------------------------------
+!+
+subroutine print_mesh3d(mesh3d)
+type(mesh3d_struct) :: mesh3d
+print *, '------------------------'
+print *, 'Mesh: '
+print *, 'size: ', mesh3d%nhi
+print *, 'min: ', mesh3d%min
+print *, 'max: ', mesh3d%max
+print *, 'delta: ', mesh3d%delta
+print *, 'gamma: ', mesh3d%gamma
+print *, 'charge: ', mesh3d%charge
+if (allocated(mesh3d%rho)) print *, 'density allocated'
+if (allocated(mesh3d%efield)) print *, 'wake allocated'
+print *, '------------------------'
+end subroutine
+
+
+!------------------------------------------------------------------------
+!+
+! Subroutine csr3d_steady_state(mesh3d, offset)
+!
+! Performs the space charge calculation using the integrated Green function method
+! and FFT-based convolutions. 
+!
+! Input:
+!   mesh3d        -- mesh3d_struct: populated with %rho
+!
+!   offset        -- real(3), optional: Offset coordinates x0, y0, z0 to evaluate the field,
+!                    relative to rho. 
+!                    Default: (0,0,0)
+!                        For example, an offset of (0,0,10) can be used to compute 
+!                        the field at z=+10 m relative to rho. 
+!
+!
+!
+! Output:
+!   mesh3d        -- mesh3d_struct: populated with %wake                            
+!
+!
+!
+! Notes: 
+!
+!     
+!
+!-
+subroutine csr3d_steady_state(mesh3d, rho, offset, normalize)
+type(mesh3d_struct), intent(inout):: mesh3d
+real(dp), intent(in) :: rho
+logical, optional :: normalize
+real(dp), allocatable, dimension(:,:,:,:) :: image_efield   ! electric field grid
+real(dp), optional :: offset(3)
+real(dp) :: offset0(3)
+real(dp), parameter :: c_light = 299792458.0
+
+
+print *, 'csr3d_steady_state'
+
+! Free space field
+call csr3d_steady_state_solver(mesh3d%rho, mesh3d%gamma, rho, mesh3d%delta, &
+   mesh3d%efield, offset=offset0, normalize=normalize)
+
+
+end subroutine csr3d_steady_state
+
 
 
 

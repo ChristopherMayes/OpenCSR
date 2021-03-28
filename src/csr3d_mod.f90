@@ -15,229 +15,30 @@ implicit none
 integer, parameter, private :: dp = REAL64
 !integer, parameter, private :: qp = REAL128
 
-type mesh3d_struct
-  integer :: size(3) = [64, 64, 64]     ! Grid shape
-  real(dp) :: min(3)                    ! Minimim in each dimension
-  real(dp) :: max(3)                    ! Maximum in each dimension
-  real(dp) :: delta(3)                  ! Grid spacing
-  real(dp) :: gamma                     ! Relativistic gamma
-  real(dp) :: rho                       ! bending radius (positive)
-  real(dp) :: charge                    ! Total charge on mesh
-  real(dp), allocatable, dimension(:,:,:) :: density        ! Charge density grid
-  real(dp), allocatable, dimension(:,:,:) :: density_prime        ! d/dz density
-  real(dp), allocatable, dimension(:,:,:,:) :: wake        ! wake grid
-
-end type
-
-
-
-
 
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 contains
 
 
-
-! -----------------
-! -----------------
-! Write grid utility
-!
-subroutine write_2d(fname, grid)
-real(dp) :: grid(:,:)
-integer :: i, j, outfile
-character(*) :: fname
-
-open(newunit=outfile, file = trim(fname))
-
-write(outfile, *)  size(grid, 1)
-write(outfile, *)  size(grid, 2)
-do i = 1, size(grid, 1)
-  do j = 1, size(grid, 2)
-    write(outfile, *) grid(i, j)
-  enddo
-enddo  
-close(outfile)
-write(*,*) 'Grid written to ', trim(fname)  
-end subroutine
-! -----------------
-! -----------------
-
-
 !------------------------------------------------------------------------
 !+
-subroutine print_mesh3d(mesh3d)
-type(mesh3d_struct) :: mesh3d
-print *, '------------------------'
-print *, 'Mesh: '
-print *, 'size: ', mesh3d%size
-print *, 'min: ', mesh3d%min
-print *, 'max: ', mesh3d%max
-print *, 'delta: ', mesh3d%delta
-print *, 'gamma: ', mesh3d%gamma
-print *, 'rho: ', mesh3d%rho
-print *, 'charge: ', mesh3d%charge
-if (allocated(mesh3d%density)) print *, 'density allocated'
-if (allocated(mesh3d%density_prime)) print *, 'density_prime allocated'
-if (allocated(mesh3d%wake)) print *, 'wake allocated'
-print *, '------------------------'
-end subroutine
-
-
-
-
-subroutine csr3d_calc()
-
-
-print *, 'Done!'
-end subroutine
-
-
-
-
-
-
-
-
-
-
-subroutine ellipinc_test()
-real(dp) :: phi, m, mc, elb, eld
-real(dp) :: ellipkinc, ellipeinc
-phi = 0.1
-m = 0.5
-
-call ellipinc(phi, m, ellipkinc, ellipeinc)
-print *, 'ellipinc(phi, m, ellipkinc, ellipeinc)', phi, m, ellipkinc, ellipeinc
-
-print *, ' ------ negative m test ---------' 
-phi = 0.1761732772710074
-m = -2001999.9999999998
-
-call ellipinc(phi, m, ellipkinc, ellipeinc)
-print *, 'ellipinc(phi, m, ellipkinc, ellipeinc)', phi, m, ellipkinc, ellipeinc
-
-
-!     Inputs: phi = amplitude, mc = complementary parameter, 0 <= m < 1
-!
-!     Outputs: elb = B(phi|m), eld = D(phi|m)
-
-
-
-
-
-end subroutine
-
-
-
-!------------------------------------------------------------------------
-!+
-! Subroutine csr3d_steady_state(mesh3d, offset)
-!
-! Performs the space charge calculation using the integrated Green function method
-! and FFT-based convolutions. 
-!
-! Input:
-!   mesh3d        -- mesh3d_struct: populated with %rho
-!
-!   offset        -- real(3), optional: Offset coordinates x0, y0, z0 to evaluate the field,
-!                    relative to rho. 
-!                    Default: (0,0,0)
-!                        For example, an offset of (0,0,10) can be used to compute 
-!                        the field at z=+10 m relative to rho. 
-!
-!   at_cathode    -- logical, optional: Maintain constant voltage at the cathode 
-!                       using image charges. Default is False. 
-!
-!   calc_bfield    -- logical, optional: Calculate the magnetic field mesh3d%bfield
-!
-!                     Default: False
-!
-!
-! Output:
-!   mesh3d        -- mesh3d_struct: populated with %efield, and optionally %bfield                             
-!
-!
-!
-! Notes: 
-!   The magnetic field components can be calculated by:
-!     Bx = -(beta/c) * Ey
-!     By =  (beta/c) * Ex
-!     Bz = 0
-!   The image charges move in the opposite direction, so the signs are flipped. 
-!     
-!
-!-
-subroutine csr3d_steady_state(mesh3d, offset)
-type(mesh3d_struct) :: mesh3d
-real(dp), allocatable, dimension(:,:,:,:) :: image_efield   ! electric field grid
-real(dp), optional :: offset(3)
-real(dp) :: offset0(3), beta
-real(dp), parameter :: c_light = 299792458.0
-
-print *, 'csr3d_steady_state'
-
-if (.not. present(offset)) then
-  offset0 = 0
-else
-  offset0 = offset
-endif
-
-! Free space field
-call csr3d_steady_state_solver(mesh3d%density, mesh3d%gamma, mesh3d%rho, mesh3d%delta, mesh3d%wake, offset=offset0)
-
-
-end subroutine csr3d_steady_state
-
-
-
-
-subroutine calc_density_derivative_complex(density, density_prime, dz)
-real(dp), intent(in), dimension(:,:,:) :: density
-real(dp), intent(in) :: dz
-complex(dp), dimension(:,:,:), intent(inout) :: density_prime
-integer :: nx, ny, nz
-
-print *, 'calc_density_derivative...'
-
-! Sizes
-nx = size(density, 1)
-ny = size(density, 2)
-nz = size(density, 3)
-
-! Allocate double-sized arrays. This array will be placed in the first octant
-!allocate( density_prime( 2*size(density, 1), 2*size(density, 2), 2*size(density, 3) ))
-density_prime = 0 ! Zero out everything
-
-! Endpoints: second order Forward and backwards stencils
-density_prime(1:nx,1:ny,1)  = (-(3/2)*density(:,:,1)    + 2*density(:,:,2)    -(1/2)*density(:,:,3) )/dz
-density_prime(1:nx,1:ny,nz) = ( (1/2)*density(:,:,nz-2) - 2*density(:,:,nz-1) +(3/2)*density(:,:,nz) )/dz
-
-! Second order central differences
-density_prime(1:nx,1:ny,2:nz-1) =  (density(:,:,3:nz) - density(:,:,1:nz-2))/(2*dz)
-!
-
-!print *, real(density_prime(size(density, 1), size(density, 2), :))
-!print *, density_prime
-print *, 'calc_density_derivative...Done'
-
-end subroutine
-
-
-!------------------------------------------------------------------------
-!+
-! Subroutine csr3d_steady_state_solver(rho, gamma, delta, wake, offset)
+! Subroutine csr3d_steady_state_solver(density, gamma, rho, delta, wake, offset, normalize)
 !
 ! Deposits particle arrays onto mesh
 !
 ! Input:
-!   rho          -- REAL64(:,:,:): charge density array in x, y, z
+!   density      -- REAL64(:,:,:): charge density array in x, y, z
+!                                  This should be normalized so that:
+!                                  sum(density)*product(delta) = 1
+!
 !   delta        -- REAL64(3): vector of grid spacings dx, dy, dz
+!
 !   gamma        -- REAL64: relativistic gamma
+!
 !   icomp        -- integer: Field component requested:
 !                        0: phi (scalar potential)
 !                       
-!
 !   wake        -- REAL64(:,:,:,3): allocated wakefield array to populate.
 !                      
 !                                     The final index corresponds to components
@@ -248,6 +49,11 @@ end subroutine
 !
 !   phi           -- REAL64(:,:,:), optional: allocated potential array to populate
 !
+!   normalize     -- REAL64, optional: Return normalized units (1/m^2)
+!                                      Otherwise further multiply by 1/(4*pi*epsilon_0 * rho)
+!                                      to return V/m
+!                    Default: True
+!
 !   offset        -- real(3), optional: Offset coordinates x0, y0, z0 to evaluate the field,
 !                    relative to rho. 
 !                    Default: (0,0,0)
@@ -255,19 +61,20 @@ end subroutine
 !                        the field at z=+10 m relative to rho. 
 !
 ! Output:
-!   wake        -- REAL64(:,:,:,3) :  3D CSR wake                          
+!   wake        -- REAL64(:,:,:,3) :  3D CSR wake                         
 !
 !
 ! Notes: 
 !
 !-
-subroutine csr3d_steady_state_solver(density, gamma, rho, delta, wake, offset)
+subroutine csr3d_steady_state_solver(density, gamma, rho, delta, wake, offset, normalize)
 
 
 real(dp), intent(in), dimension(:,:,:) :: density
 real(dp), intent(in) :: gamma, rho, delta(3)
 real(dp), optional, intent(out), dimension(:,:,:,:) :: wake
 real(dp), intent(in), optional :: offset(3)
+logical, optional :: normalize
 ! internal arrays
 real(dp), allocatable, dimension(:,:,:) :: density_prime
 complex(dp), allocatable, dimension(:,:,:) :: complex_density_prime, cgrn
@@ -279,12 +86,20 @@ real(dp), parameter :: fpei=299792458.0**2*1.00000000055d-7  ! this is 1/(4 pi e
 integer :: nx, ny, nz, nx2, ny2, nz2
 integer :: i, icomp, ishift, jshift, kshift
 
+
 ! Sizes
 nx = size(density, 1); ny = size(density, 2); nz = size(density, 3)
 nx2 = 2*nx; ny2 = 2*ny; nz2 = 2*nz; 
 
 ! Grid spacings (conveniences)
 dx = delta(1); dy = delta(2); dz = delta(3)
+
+! Factor for normalized 1/m^2 units, or V/m
+factor = dx*dy*dz/(nx2*ny2*nz2)
+if (present(normalize)) then
+  if (.not. normalize) factor = fpei/rho * dx*dy*dz/(nx2*ny2*nz2)
+endif
+
 
 ! Allocate complex scratch arrays
 !allocate(density_prime(nx, ny, nz))
@@ -328,21 +143,44 @@ do icomp=1, 3
   ishift = nx-1
   jshift = ny-1
   kshift = nz-1
-  
-  ! Extract field
-  ! ???? Factor
-  factor = dx*dy*dz/(nx2*ny2*nz2)
-  !print *, 'cgrn diagonal'
-  !do i=1, nx2
-  !  print *, i, real(cgrn(i,i,i), dp)
-  !enddo
-  !print *, 'shifts:', ishift, jshift, kshift
-  !print *, 'factor', factr, nx2, ny2, nz2
+
+ ! Extract field
   wake(:,:,:,icomp) = factor*real(cgrn(1+ishift:nx+ishift, 1+jshift:ny+jshift, 1+kshift:nz+kshift), dp)
 
 enddo
 
 end subroutine csr3d_steady_state_solver
+
+
+
+subroutine calc_density_derivative_complex(density, density_prime, dz)
+real(dp), intent(in), dimension(:,:,:) :: density
+real(dp), intent(in) :: dz
+complex(dp), dimension(:,:,:), intent(inout) :: density_prime
+integer :: nx, ny, nz
+
+print *, 'calc_density_derivative...'
+
+! Sizes
+nx = size(density, 1)
+ny = size(density, 2)
+nz = size(density, 3)
+
+! Allocate double-sized arrays. This array will be placed in the first octant
+!allocate( density_prime( 2*size(density, 1), 2*size(density, 2), 2*size(density, 3) ))
+density_prime = 0 ! Zero out everything
+
+! Endpoints: second order Forward and backwards stencils
+density_prime(1:nx,1:ny,1)  = (-(3/2)*density(:,:,1)    + 2*density(:,:,2)    -(1/2)*density(:,:,3) )/dz
+density_prime(1:nx,1:ny,nz) = ( (1/2)*density(:,:,nz-2) - 2*density(:,:,nz-1) +(3/2)*density(:,:,nz) )/dz
+
+! Second order central differences
+density_prime(1:nx,1:ny,2:nz-1) =  (density(:,:,3:nz) - density(:,:,1:nz-2))/(2*dz)
+
+print *, 'calc_density_derivative...Done'
+
+end subroutine
+
 
 
 !------------------------------------------------------------------------
@@ -357,7 +195,7 @@ end subroutine csr3d_steady_state_solver
 !   cgrn         -- COMPLEX128(:,:,:): pre-allocated array 
 !   delta        -- REAL64(3): vector of grid spacings dx, dy, dz
 !   gamma        -- REAL64: relativistic gamma
-!   rho          -- REAL64: bending radius (must be positive)
+!   rho          -- REAL64: bending radius. Can be positive or negative.
 !   icomp        -- integer: Wake component requested:
 !
 !                        1: Wx
@@ -399,7 +237,7 @@ integer :: i,j,k, isize, jsize, ksize
 ! y ->  y/rho
 ! z ->  z/(2*rho)
 
-dx=delta(1)/rho; dy=delta(2)/rho; dz=delta(3)/(2*rho)
+dx=delta(1)/rho; dy=delta(2)/rho; dz=delta(3)/(2*abs(rho)) ! Should account for negative rho
 
 ! Grid min
 isize = size(cgrn,1); jsize=size(cgrn,2); ksize=size(cgrn,3)
@@ -412,7 +250,7 @@ zmin = ( -ksize/2 +1) *dz
 if (present(offset)) then
   xmin = xmin + offset(1)/rho
   ymin = ymin + offset(2)/rho
-  zmin = zmin + offset(3)/(2*rho)
+  zmin = zmin + offset(3)/(2*abs(rho))
 endif
 
 !$ print *, 'OpenMP Green function calc get_cgrn_csr3d'
@@ -485,7 +323,13 @@ end function psi_s
 
 !------------------------------------------------------------------------
 !+
-real(dp) function psi0(x, y, z, gamma, icomp, dx, dy, dz)
+! function psi0(x, y, z, gamma, icomp, dx, dy, dz)
+!
+! Same as psi, but handles singularities along the coordinate axes.
+! This should be used when creating a grid of points. 
+!
+
+elemental real(dp) function psi0(x, y, z, gamma, icomp, dx, dy, dz)
 real(dp), intent(in) :: x, y, z, gamma, dx, dy, dz
 integer, intent(in) :: icomp
 select case (icomp)
@@ -514,9 +358,6 @@ select case (icomp)
         psi0 = psi(x, y, z, gamma, icomp)
     endif
     
-    case default
-        print *, 'error!'
-        stop
     
 end select    
 end function
@@ -550,16 +391,27 @@ end function
 !+
 ! elemental real(dp) function psi(x, y, z, gamma, icomp)
 !
+! Returns a component of the 3D CSR potential psi from Ref. [X]
 !
 ! Eq. 24 from Ref[X] without the prefactor e beta^2 / (2 rho^2)
 ! This is actually psi_x_hat
 !
 !
+! Inputs
+! ------
+! Same as alpha plus:
 !
 ! icomp : integer
-!          1: x
-!          2: y
-!          3: s
+!          1: Wx
+!          2: Wy
+!          3: Ws
+!
+! Returns:
+! psi : real
+!      psi_x if icomp == 1
+!      psi_y if icomp == 2
+!      psi_s if icomp == 3
+!
 !-
 elemental real(dp) function psi(x, y, z, gamma, icomp)
 real(dp), intent(in) :: x, y, z, gamma
@@ -637,8 +489,32 @@ end function psi
 !------------------------------------------------------------------------
 !+
 ! elemental real(dp) function alpha(x, y, z, gamma)
+! 
+! alpha angle from Eq. 6 in Ref. [X]
+!
+! When z = 0, this uses the the quadratic solution. 
+! Otherwise, it uses the quartic solution in Appendix A. 
 !
 !
+  
+! Inputs
+! ------
+!   x  : real
+!        horizontal position divided by rho
+!        This is chi in Ref. [X]
+!   y  : real
+!        vertical position divided by rho 
+!        This is zeta in Ref. [X]
+!   z  : real
+!        longitudinal position divided by 2*rho
+!        This is xi in Ref. [X]
+!
+!   gamma : real
+!           realativistic gamma
+!
+! Returns
+! -------
+!  alpha : real
 !
 !-
 elemental real(dp) function alpha(x, y, z, gamma)
@@ -684,6 +560,63 @@ else
 
 endif
 end function alpha
+
+
+
+
+!------------------------------------------------------------------------
+! Debugging utils
+
+
+! -----------------
+! -----------------
+! Write grid utility for debugging
+!
+subroutine write_2d(fname, grid)
+real(dp) :: grid(:,:)
+integer :: i, j, outfile
+character(*) :: fname
+
+open(newunit=outfile, file = trim(fname))
+
+write(outfile, *)  size(grid, 1)
+write(outfile, *)  size(grid, 2)
+do i = 1, size(grid, 1)
+  do j = 1, size(grid, 2)
+    write(outfile, *) grid(i, j)
+  enddo
+enddo  
+close(outfile)
+write(*,*) 'Grid written to ', trim(fname)  
+end subroutine
+! -----------------
+! -----------------
+
+
+
+subroutine ellipinc_test()
+real(dp) :: phi, m, mc, elb, eld
+real(dp) :: ellipkinc, ellipeinc
+phi = 0.1
+m = 0.5
+
+call ellipinc(phi, m, ellipkinc, ellipeinc)
+print *, 'ellipinc(phi, m, ellipkinc, ellipeinc)', phi, m, ellipkinc, ellipeinc
+
+print *, ' ------ negative m test ---------' 
+phi = 0.1761732772710074
+m = -2001999.9999999998
+
+call ellipinc(phi, m, ellipkinc, ellipeinc)
+print *, 'ellipinc(phi, m, ellipkinc, ellipeinc)', phi, m, ellipkinc, ellipeinc
+
+
+!     Inputs: phi = amplitude, mc = complementary parameter, 0 <= m < 1
+!
+!     Outputs: elb = B(phi|m), eld = D(phi|m)
+
+end subroutine
+
 
 
 end module

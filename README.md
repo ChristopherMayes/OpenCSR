@@ -20,6 +20,9 @@ cmake --build build --target install
 
 If you like to install OpenCSR into another directory than the default, pass to the `cmake -S . -B build` line the additional argument `-DCMAKE_INSTALL_PREFIX=/your/custom/install/path`.
 
+To build the debug version, add the flag:
+`-DCMAKE_BUILD_TYPE=Debug`
+
 ## Windows
 
 For Windows it will be necessary to use `NMake` to read and execute the generated makefiles.
