@@ -1,3 +1,6 @@
+! This code is part of the OpenCSR package developed at:
+! https://github.com/ChristopherMayes/OpenCSR
+
 module elliptic_integral_mod
 
 use, intrinsic :: iso_fortran_env
