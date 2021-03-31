@@ -4,12 +4,10 @@
 
 module csr3d_mod
 
-! use ieee_arithmetic, only :  ieee_is_nan
-
 use, intrinsic :: iso_fortran_env
 use elliptic_integral_mod, only : ellipinc 
 use fft_mod, only : ccfft3d
-
+!$ use omp_lib, only: omp_get_max_threads
 
 implicit none
 
@@ -261,6 +259,7 @@ real(dp) :: x, y, z, xmin, ymin, zmin
 real(dp) :: gval
 integer :: imin, imax, jmin, jmax, kmin, kmax
 integer :: i,j,k, isize, jsize, ksize
+integer :: n_threads
 
 ! Mesh spacings in scaled units
 ! x - > x/rho
@@ -284,7 +283,10 @@ if (present(offset)) then
   zmin = zmin + offset(3)/abs(2*rho)
 endif
 
-!$ print *, 'OpenMP Green function calc get_cgrn_csr3d'
+
+
+!$ n_threads = omp_get_max_threads()
+!$ if (n_threads > 1) write(*,'(a, i0)') 'OpenMP Green function calc get_cgrn_csr3d, n_threads = ', n_threads
 !$OMP PARALLEL DO &
 !$OMP DEFAULT(FIRSTPRIVATE), &
 !$OMP SHARED(cgrn)
