@@ -499,8 +499,10 @@ if (icomp == 1) then
     psi = f1*F / (xp*xy) - (x2*f2 + y2*f1)*E / (xp*(y2+f2)*xy)  &
         + ( kap2 - 2*beta2*xp2 + beta2*xp*f1*cos2a  ) / (beta *xp*(kap2 - beta2*xp2*sin2a2)) &
         + kap*( y4 - x2*f2 - 2*beta2*y2*xp2 )*sin2a / ( xy2*(y2 + f2)*(kap2-beta2*xp2*sin2a2)  ) &
-        + kap*beta2*xp*( x2*f2 + y2*f1 )*sin2a*cos2a / ( xy2*(y2+f2)*(kap2-beta2*xp2*sin2a2)  ) &
-        - (2/beta2)* F/xy ! Include the phi term      
+        + kap*beta2*xp*( x2*f2 + y2*f1 )*sin2a*cos2a / ( xy2*(y2+f2)*(kap2-beta2*xp2*sin2a2)  )
+        
+        ! This is the psi_phi term. TODO: make another component with this
+        ! - (2/beta2)* F/xy ! Include the phi term      
 
 elseif (icomp == 2) then
 ! psi_y
