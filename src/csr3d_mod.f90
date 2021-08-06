@@ -1,4 +1,4 @@
-! This code is part of the OpenCSR package developed at:
+ ! This code is part of the OpenCSR package developed at:
 ! https://github.com/ChristopherMayes/OpenCSR
 
 
@@ -341,7 +341,11 @@ else
     kap = 2*(alp - z)/beta ! Simpler form of kappa
     !kap = sqrt(x**2 + y**2 + 4*(1+x) * sin(alp)**2) 
     
-    psi_s =  (cos(2*alp) - 1/(1+x)) / (kap - beta*(1+x)*sin(2*alp) )
+    psi_s =  &
+        ! Acceleration term
+        (cos(2*alp) - 1/(1+x)) / (kap - beta*(1+x)*sin(2*alp) ) &
+        ! Space Charge term
+        -1 / (  (gamma**2-1)*(1+x)*(kap - beta*(1+x)*sin(2*alp))  )
     
 endif
 end function psi_s
@@ -463,7 +467,10 @@ if (icomp == 3) then
     if ((x == 0) .and. (y == 0) .and. (z == 0)) then
       psi = 0
     else
-      psi = (cos(2*alp) - 1/(1+x)) / (kap - beta*(1+x)*sin(2*alp) )
+      ! Acceleration term
+      psi = (cos(2*alp) - 1/(1+x)) / (kap - beta*(1+x)*sin(2*alp) )  ! acceleration term 
+      ! Add Space Charge term
+      psi = psi -1 / (  (gamma**2-1)*(1+x)*(kap - beta*(1+x)*sin(2*alp))  )
     endif
     return
 endif
@@ -495,23 +502,38 @@ if (icomp == 1) then
 ! psi_x    
 ! psi_x is actually psi_x_hat that includes the psi_phi term
 ! There is an extra ] in the numerator of the second term. All terms should multiply E. 
-
+    ! Acceleration term
     psi = f1*F / (xp*xy) - (x2*f2 + y2*f1)*E / (xp*(y2+f2)*xy)  &
         + ( kap2 - 2*beta2*xp2 + beta2*xp*f1*cos2a  ) / (beta *xp*(kap2 - beta2*xp2*sin2a2)) &
         + kap*( y4 - x2*f2 - 2*beta2*y2*xp2 )*sin2a / ( xy2*(y2 + f2)*(kap2-beta2*xp2*sin2a2)  ) &
         + kap*beta2*xp*( x2*f2 + y2*f1 )*sin2a*cos2a / ( xy2*(y2+f2)*(kap2-beta2*xp2*sin2a2)  )
         
+    ! Add Space Charge term
+    ! prefactor 1/(gamma*beta)^2 = 1/(gamma^2-1)to agree with the prefactor of psi_x    
+    psi = psi + 1/(gamma**2-1) * (F/(xp*xy) \
+            + (x*(2+x)-y2)*E/(xp*(y2+f2)*xy) \
+            + beta*(cos2a-xp)/(kap2 - beta2*xp2*sin2a2) \
+            - kap*sin2a * ( (x*(2+x)*(beta2*xp2-2) + y2*(2+beta2*xp2) ) + beta2*xp*(x*(2+x)-y2)*cos2a ) \
+                / ( (y4 + x2*f2 + 2*y2*f1) * (kap2 - beta2*xp2*sin2a2 ) ) )
+            
         ! This is the psi_phi term. TODO: make another component with this
         ! - (2/beta2)* F/xy ! Include the phi term      
 
 elseif (icomp == 2) then
 ! psi_y
+    ! Acceleration term
     psi = y * ( &
             F/xy - (x*(2+x)+y2)*E / ((y2+f2)*xy) &
             - beta*(1-xp*cos2a) / (kap2-beta2*xp2*sin2a2) &
             + kap*xp*( -(2+beta2)*y2 + (-2+beta2)*x*(2+x) ) * sin2a / ( (y4 + x2*f2 + 2*y2*f1)*( kap2-beta2*xp2*sin2a2 ) ) &
             + kap*beta2*xp2*(y2 + x*(2+x))*sin2a*cos2a / ( ( y4 + x2*f2 + 2*y2*f1)*(kap2 -beta2*xp2*sin2a2)  ) &
-            )      
+            )         
+    ! Add SC term    
+    psi = psi + (y/(gamma**2-1)) * ( 2*E / ( (y2 + f2)*xy) - beta / (kap2 - beta2*xp2*sin2a2) \
+            + kap*xp*( beta2*(f1 + y2) -4 + 2*beta2*xp*cos2a )*sin2a \
+            / ( (y4 + x2*f2 + 2*y2*f1) * (kap2 - beta2*xp2*sin2a2 ) ) )
+
+            
 endif
 
 
